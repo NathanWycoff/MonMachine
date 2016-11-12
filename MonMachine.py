@@ -104,7 +104,7 @@ class Environment(object):
             #print "Nothing New..."
             pass
         else:
-            print "Something new!"
+            #print "Something new!"
             new_list = self.log.text.split('\n')
             new_entries = new_list[len(self.event_list):]
             self.event_list = new_list
@@ -290,7 +290,7 @@ driver.find_element_by_name("login").click()
 time.sleep(1)
 driver.find_element_by_name("username").clear()
 time.sleep(1)
-driver.find_element_by_name("username").send_keys("monmachine")
+driver.find_element_by_name("username").send_keys("MonMachine")
 time.sleep(1)
 driver.find_element_by_css_selector("button[type=\"submit\"]").click()
 time.sleep(1)
@@ -331,8 +331,11 @@ while True:
     driver.find_element_by_name("challenge").click()
     driver.find_element_by_name("format").click()
     driver.find_element_by_xpath("(//button[@name='selectFormat'])[70]").click()
+    original_url = driver.current_url#Until the search page loads, wait
     driver.find_element_by_name("makeChallenge").click()
-    
+    #Wait for the battle to load
+    while driver.current_url == original_url:
+        time.sleep(1)
     ###################################
     #####   MAIN GAMEPLY CYCLE  #######
     ###################################
