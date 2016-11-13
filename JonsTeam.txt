@@ -1,0 +1,41 @@
+Gengar  
+Ability: Levitate  
+- Hypnosis  
+- Explosion  
+- Confuse Ray  
+- Night Shade  
+
+Starmie  
+Ability: Illuminate  
+- Blizzard  
+- Psychic  
+- Recover  
+- Thunder Wave  
+
+Alakazam  
+Ability: Synchronize  
+- Psychic  
+- Seismic Toss  
+- Thunder Wave  
+- Recover  
+
+Tauros  
+Ability: Intimidate  
+- Body Slam  
+- Earthquake  
+- Blizzard  
+- Hyper Beam  
+
+Snorlax  
+Ability: Immunity  
+- Body Slam  
+- Earthquake  
+- Counter  
+- Self-Destruct  
+
+Exeggutor  
+Ability: Chlorophyll  
+- Sleep Powder  
+- Psychic  
+- Explosion  
+- Stun Spore
