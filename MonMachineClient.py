@@ -181,7 +181,7 @@ class Environment(object):
             #Check if the battle's over
             elif re.match('.* won the battle!', entry) is not None:
                 
-                if re.match('MonMachine',entry) is not None:
+                if re.match('MonTonSoup',entry) is not None:
                     print "We win!"
                     self.agent.reward(100.0, 'Terminal')
                 else:
@@ -255,11 +255,11 @@ class Agent(object):
             self.Q = [[np.random.normal() for x in self.action_space] for y in self.state_space]
         else:#This code copied from http://stackoverflow.com/questions/19838380/building-list-of-lists-from-csv-file
             #Read in old V
-            with open('/home/nathan/Documents/Self Study/MonMachine/learned_V.csv', 'rU') as f:  #opens PW file
+            with open('/home/nathan/Documents/Self Study/MonTonSoup/learned_V.csv', 'rU') as f:  #opens PW file
                 self.V = list([float(x) for x in list(rec)] for rec in csv.reader(f, delimiter=','))
             
             #Read in old Q
-            with open('/home/nathan/Documents/Self Study/MonMachine/learned_Q.csv', 'rU') as f:  #opens PW file
+            with open('/home/nathan/Documents/Self Study/MonTonSoup/learned_Q.csv', 'rU') as f:  #opens PW file
                 self.Q = list([float(x) for x in list(rec)] for rec in csv.reader(f, delimiter=','))
         
         #Other Initialization
@@ -297,12 +297,12 @@ class Agent(object):
             self.V[i] = sum([self.epsilon / 3.0 * self.Q[i][x-1] if x != optimal_action else self.epsilon * self.Q[i][x-1] for x in self.action_space])
     
     def save(self):
-        target = '/home/nathan/Documents/Self Study/MonMachine/learned_Q.csv'
+        target = '/home/nathan/Documents/Self Study/MonTonSoup/learned_Q.csv'
         with open(target, 'w') as f:
             writer = csv.writer(f)
             writer.writerows(self.Q)
         
-        target = '/home/nathan/Documents/Self Study/MonMachine/learned_V.csv'
+        target = '/home/nathan/Documents/Self Study/MonTonSoup/learned_V.csv'
         with open(target, 'w') as f:
             writer = csv.writer(f)
             writer.writerows(self.Q)
@@ -324,7 +324,7 @@ driver.find_element_by_name("login").click()
 time.sleep(1)
 driver.find_element_by_name("username").clear()
 time.sleep(1)
-driver.find_element_by_name("username").send_keys("MonMachine")
+driver.find_element_by_name("username").send_keys("MonTonSoup")
 time.sleep(1)
 driver.find_element_by_css_selector("button[type=\"submit\"]").click()
 time.sleep(1)
