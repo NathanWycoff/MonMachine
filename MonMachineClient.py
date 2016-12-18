@@ -334,20 +334,20 @@ driver.find_element_by_name("password").send_keys("Stats2016")
 time.sleep(1)
 driver.find_element_by_css_selector("button[type=\"submit\"]").click()
 time.sleep(3)
-
-driver.find_element_by_name("format").click()
-time.sleep(1)
-driver.find_element_by_xpath("(//button[@name='selectFormat'])[51]").click()
-time.sleep(1)
-
-original_url = driver.current_url#Until the search page loads, wait
-
-driver.find_element_by_name("search").click()
-time.sleep(1)
-
-#Wait for the battle to load
-while driver.current_url == original_url:
-    time.sleep(1)
+#
+##driver.find_element_by_name("format").click()
+#time.sleep(1)
+#driver.find_element_by_xpath("(//button[@name='selectFormat'])[51]").click()
+#time.sleep(1)
+#
+#original_url = driver.current_url#Until the search page loads, wait
+#
+#driver.find_element_by_name("search").click()
+#time.sleep(1)
+#
+##Wait for the battle to load
+#while driver.current_url == original_url:
+#    time.sleep(1)
 
 #
 #Repeatedly play someone
