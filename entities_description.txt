@@ -1,0 +1,50 @@
+This file describes entities implemented for the game
+
+Moves of type <type> deal double damage to entities of type <type>.
+
+N(mu, sigma) represents a normal distribution with mean mu and standard devation sigma.
+
+
+---Entity A---
+Low health, high attack, high attack variance. Can dodge attacks.
+
+Max_Health = 500
+
+--Move 1 (type NA):
+Defensive Move. Permanently causes opponents to miss (attacks deal 0 damage) with probability 0.5. Using this move more than once has no effect.
+
+--Move 2 (type B):
+Offensive Move. Deals high damage with high variance. Damage ~ N(250, 40)
+
+--Move 3 (type C):
+Offensive Move. Deals high damage with high variance. Damage ~ N(250, 40)
+
+
+---Entity B---
+Medium health, medium attack, low attack variance. Its attack is multiplied by variable amount <d>.
+
+Max_Health = 1000
+
+--Move 1 (type NA):
+Tactical Move. Store in <d> 1.5 times the current value of <d>; that is: increase the mean of future attacks by 1.5 leaving variance unchanged.
+
+--Move 2 (type B):
+Offensive Move. Deals high damage with high variance. Damage ~ N(150, 10)
+
+--Move 3 (type A):
+Offensive Move. Deals high damage with high variance. Damage ~ N(150, 10)
+
+
+---Entity C---
+High health, low attack, medium attack variance. May heal itself.
+
+Max_Health = 1500
+
+--Move 1 (type NA):
+Defensive Move. Health is increased by amount <(max_health - current_health)/2.0>
+
+--Move 2 (type C):
+Offensive Move. Deals low damage with medium variance. Damage ~ N(100, 20)
+
+--Move 3 (type A):
+Offensive Move. Deals low damage with medium variance. Damage ~ N(100, 20)

@@ -3,7 +3,11 @@
 """
 Created on Tue Dec 13 17:21:15 2016
 
-@author: nathan
+Classes implementing Entities for the MiniMon.
+
+See entities_description.txt for more info.
+
+@author: Nathan Wycoff
 """
 
 import numpy as np
@@ -43,6 +47,8 @@ class Entity_A(object):
         
         #Set special stats
         self.p_miss = 0.0
+        self.d = 1.0
+        self.max_health = self.health
         
         #Track debug mode
         self.debug = debug
@@ -55,11 +61,11 @@ class Entity_A(object):
     def move(self, which, target = None):
         #Move 1 defensive, permanently cause opponents to deal no damage with
         #probability 0.5. Doing this move twice has no effect.
-        if which == 1:
+        if which == '1':
             self.p_miss = 0.5
         
         #Move 2 offensive, high damage, high variance, type B.
-        elif which == 2:
+        elif which == '2':
             #Make sure there's a target to attack
             if target is None:
                 self.no_target_err()
@@ -83,7 +89,7 @@ class Entity_A(object):
             target.take_damage(damage)
         
         #Move 3 offensive, high damage, high variance, type C.
-        elif which == 3:
+        elif which == '3':
             #Make sure there's a target to attack
             if target is None:
                 self.no_target_err()
@@ -119,6 +125,8 @@ class Entity_A(object):
         
     def __str__(self):
         return "Entity of type " + self.t + " with " + str(self.health) + " health."
+
+    __repr__ = __str__
         
 
 class Entity_B(object):
@@ -128,7 +136,9 @@ class Entity_B(object):
         self.alive = True
         
         #Set special stats
+        self.p_miss = 0.0
         self.d = 1
+        self.max_health = self.health
         
         #Track debug mode
         self.debug = debug
@@ -141,11 +151,11 @@ class Entity_B(object):
     def move(self, which, target = None):
         #Move 1 tactical, increase damage multiplier by 1.5 each time
         #this move is performed.
-        if which == 1:
+        if which == '1':
             self.d = 1.5 * self.d
         
         #Move 2 offensive, medium damage, low variance, type B.
-        elif which == 2:
+        elif which == '2':
             #Make sure there's a target to attack
             if target is None:
                 self.no_target_err()
@@ -169,7 +179,7 @@ class Entity_B(object):
             target.take_damage(damage)
         
         #Move 2 offensive, medium damage, low variance, type A
-        elif which == 3:
+        elif which == '3':
             #Make sure there's a target to attack
             if target is None:
                 self.no_target_err()
@@ -205,6 +215,8 @@ class Entity_B(object):
         
     def __str__(self):
         return "Entity of type " + self.t + " with " + str(self.health) + " health."
+
+    __repr__ = __str__
         
 
 class Entity_C(object):
@@ -215,6 +227,8 @@ class Entity_C(object):
         
         #Sepcial Stats
         self.max_health = self.health
+        self.p_miss = 0.0
+        self.d = 1.0
         
         #Track debug mode
         self.debug = debug
@@ -225,15 +239,15 @@ class Entity_C(object):
     
     #Make the entity execute a move
     def move(self, which, target = None):
-        #Move 1 defensive. Increase health by half the amount lost.
-        if which == 1:
-            heal = (self.max_health - self.health) / 2
+        #Move 1 defensive. Increase health by an eigth the amount lost.
+        if which == '1':
+            heal = (self.max_health - self.health) / 8.0
             if self.debug > 0:
                 print 'Healed for ' + str(heal)
             self.health += heal
         
         #Move 2 offensive, low damage, medium variance, type B.
-        elif which == 2:
+        elif which == '2':
             #Make sure there's a target to attack
             if target is None:
                 self.no_target_err()
@@ -257,7 +271,7 @@ class Entity_C(object):
             target.take_damage(damage)
         
         #Move 2 offensive, medium damage, low variance, type A
-        elif which == 3:
+        elif which == '3':
             #Make sure there's a target to attack
             if target is None:
                 self.no_target_err()
@@ -294,9 +308,22 @@ class Entity_C(object):
     def __str__(self):
         return "Entity of type " + self.t + " with " + str(self.health) + " health."
 
+    __repr__ = __str__
+
+#Return a random entity
+def random_entity(debug = 0):
+    a = np.random.randint(0,3)
+    if a == 0:
+        return(Entity_A(debug = debug))
+    if a == 1:
+        return(Entity_B(debug = debug))
+    if a == 2:
+        return(Entity_C(debug = debug))
+    print 'Error in random_entity'
+
 #Testing
-a1 = Entity_A(debug = 1)
-a2 = Entity_C(debug = 1)
-a1.move(2, a2)
-a2.move(1)
+#a1 = Entity_A(debug = 1)
+#a2 = Entity_C(debug = 1)
+#a1.move(2, a2)
+#a2.move(1)
 

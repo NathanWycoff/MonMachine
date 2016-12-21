@@ -6,31 +6,23 @@ Created on Sat Dec 10 15:29:28 2016
 
 A game which is meant to be similar to pokemon, but which is totally understood
 and under the programmer's control for prototyping of AI meant to play pokemon.
-
-Rules:
-
-Entities take turns attacking each other.
-
-There are 3 types of entities, type A, B and C.
-
-There are 3 types of attacks: type A, B and C.
-
-Each entity has access to all 3 attack types.
-
-Attacks do double damage against entities of the same type, e.g., attacking an 
-    entity of type A with an attack of type A deals double damage.
-    
-Attack type A deals 100 base damage, type B 110, and type C 120 damage.
-
 """
 
 import os
 os.chdir('/home/nathan/Documents/Documents/Self Study/MonMachine')
 
+#Numerics Libraries
 import numpy as np
 import matplotlib.pyplot as plt
+
+#Convenience libraries
+import tqdm
+
+#Imports from other files
 from Agents.linear_q_learner import linear_q_learner
 from Agents.tabular_q_learner import tabular_q_learner
+from Agents.completely_random import random_learner
+import entities as ent
 
 
 
@@ -39,119 +31,165 @@ from Agents.tabular_q_learner import tabular_q_learner
 
 #Feeds information about the game to the learners/agents
 class Environment(object):
-    def __init__(self, e1, e2, l1, l2):
-        self.agent_1 = l1
-        self.agent_2 = l2
+    def __init__(self, e1, e2, debug = 0):
+        
+        #Store the agent's entities.
         self.entity_1 = e1
         self.entity_2 = e2
-        #My ent, his ent
-        self.state_1 = [1000, e2.t]
-        self.state_2 = [1000, e1.t]
+        
+        #Create state variables
+        self.state_1 = [1, e2.health, e2.t, e2.p_miss, e2.d]
+        self.state_2 = [1, e1.health, e1.t, e1.p_miss, e1.d]
         self.last_state_1 = self.state_1[:]
         self.last_state_2 = self.state_2[:]
+
+        #Declare state types; for use when creating state vector
+        self.state_types = ['C', 'C', ['A', 'B', 'C'], 'C', 'C']
         
-        self.starting_health = 1000.0
+        #When the game ends, the loop will end.
+        self.game_over = False
         
-        self.game_over = False#When the game ends, the loop will end.
-        #self.break_parent = False#Break the loop right now for debugging.
+        #Debug controls verbosity, higher is more.
+        self.debug = debug
     
-    #When an entity's health changes, record it.
-    #Entity healths are recorded as percentages, floored to 10% intervals.
-    def update_state(self, new_state_health, entity):
-        if entity == '1':
-            self.last_state_1[0] = self.state_1[0]
-            self.state_1[0] = new_state_health
-        elif entity == '2':
-            self.last_state_2[0] = self.state_2[0]
-            self.state_2[0] = new_state_health
+    #Get a local reference to the learners so they can fed the state/rewards.
+    def add_learners(self, l1, l2):
+        #Store the learning agents
+        self.agent_1 = l1
+        self.agent_2 = l2
     
+    #Update the environments state and store the last state.
+    #e1 and e2 should be the two entities.
+    def update_state(self):
+        #Update state for agent 1
+        self.last_state_1 = self.state_1[:]
+        self.state_1 = [1, np.log(abs(self.entity_2.health) + 0.1), self.entity_2.t, self.entity_2.p_miss, self.entity_2.d]
+            
+        #Update state for agent 2
+        self.last_state_2 = self.state_2[:]
+        self.state_2 = [1, np.log(abs(self.entity_1.health) + 0.1), self.entity_1.t, self.entity_1.p_miss, self.entity_1.d]
+
+    #Turn a state list into a state vector for learner consumption.
+    def get_state_vector(self, state_list):        
+        #This function will be called to create one-hot vectors for categorical variates.
+        #Assumes there is an intercept term, so the last element will return the zero vector.
+        #Examples in 'A','B','C':
+        #'A' -> [1,0]; 'B' -> [0,1]; 'C' -> [0,0]
+        #Statisticians call these "dummy variables".
+        format_categories = lambda x,i: np.array([1 if y == self.state_types[i].index(x) else 0 for y in range(len(self.state_types[i]))])[:-1]
+        
+        #Turn the list into a list of arrays containing either just the continuous
+        #vars or a one hot vector for the categorical vars.
+        enhanced_list = [np.array([x]) if self.state_types[i] == 'C' else \
+             format_categories(x,i) for i,x in enumerate(state_list)]
+        
+        #Concat all the vectors into one vector to be returned.
+        state_vec = np.concatenate(enhanced_list)
+        state_vec = state_vec.reshape([len(state_vec),1])
+        
+        return(state_vec)
+
+        format_categories = lambda x,i: np.array([1 if y == env.state_types[i].index(x) else 0 for y in range(len(env.state_types[i]))])[:-1]
+        
+        #Turn the list into a list of arrays containing either just the continuous
+        #vars or a one hot vector for the categorical vars.
+        enhanced_list = [np.array([x]) if env.state_types[i] == 'C' else \
+             format_categories(x,i) for i,x in enumerate(state_list)]
+        
+        
     #Inform the agents of the state transitions and of their rewards.
     def inform_agents(self):
         #Update Agent Turn Counters
         self.agent_1.new_turn()
         self.agent_2.new_turn()
         
-        #Check if someone died.
-        #if not self.entity_1.alive:
-        #    self.state_1 = 'L'
-        #    self.state_2 = 'W'
-        #    self.game_over = True
-        #elif not self.entity_2.alive:
-        #    self.state_1 = 'W'
-        #    self.state_2 = 'L'
-        #    self.game_over = True
-        
         if not (self.entity_1.alive and self.entity_2.alive):
+            if self.debug > 0:
+                print "Game Ending..."
             self.game_over = True
-        
-        #Typecast list into str
-        #state_1_s = ''.join(x for x in self.state_1)
-        #state_2_s = ''.join(x for x in self.state_2)
-        #last_state_1_s =  ''.join(x for x in self.last_state_1)
-        #last_state_2_s =  ''.join(x for x in self.last_state_2)
             
         #Calculate reward, simply difference in enemy health
         reward_1 = 0 * (int(self.last_state_1[0]) - int(self.state_1[0])) if self.entity_2.alive else 100
         reward_2 = 0 * (int(self.last_state_2[0]) - int(self.state_2[0])) if self.entity_1.alive else 100
         
         if reward_1 < 0 or reward_2 < 0:
-            self.game_over = True
-            print 'WARN: Negative Reward'
+            if self.debug > -1:
+                print 'WARN: Negative Reward'
         
-        #print 'Agent 1 has reward ' + str(reward_1)
-        #print 'Agent 2 has reward ' + str(reward_2)
+        if self.debug > 0:
+            print 'Agent 1 has reward ' + str(reward_1)
+            print 'Agent 2 has reward ' + str(reward_2)
         
         #Update the agents.
-        self.agent_1.update(self.last_state_1, self.state_1, reward_1)
-        self.agent_2.update(self.last_state_2, self.state_2, reward_2)
+        self.agent_1.update(self.get_state_vector(self.last_state_1), \
+                            self.get_state_vector(self.state_1), reward_1)
+        self.agent_2.update(self.get_state_vector(self.last_state_2), \
+                            self.get_state_vector(self.state_2), reward_2)
 
 
 
 #Sim Params
-iters = 30000
-learner_1 = linear_q_learner(learning_decay = 10000000000, eta = 0.5)
-learner_2 = tabular_q_learner()
+
+iters = 5000
+
+#All this just to get the state vector size.
+e1 = ent.random_entity()
+e2 = ent.random_entity()
+env = Environment(e1, e2)
+state_size = len(env.get_state_vector(env.state_1))
+
+learner_1 = linear_q_learner(state_size, ep_l = 0.05, learning_decay = 10000, exploration_decay = 1000, eta = 0.5)
+learner_2 = random_learner()
 
 wins_1 = 0
 
 eps = []
 etas = []
+game_lengths = []
 
-for it in range(iters):
+for it in tqdm.tqdm(range(iters)):
     
-    e1 = Entity()
-    e2 = Entity()
+    e1 = ent.random_entity()
+    e2 = ent.random_entity()
     
-    env = Environment(e1, e2, learner_1, learner_2)
+    env = Environment(e1, e2)
+    env.add_learners(learner_1, learner_2)
     
     eps.append(learner_1.epsilon)
     etas.append(learner_1.eta)
     
+    game_length = 0
+    
     while (not env.game_over):
         #The agents get to make a decision
-        decision_1 = learner_1.act(env.state_1)
-        decision_2 = learner_2.act(env.state_2)
+        decision_1 = learner_1.act(env.get_state_vector(env.state_1))
+        decision_2 = learner_2.act(env.get_state_vector(env.state_2))
         
         #Pick who goes first randomly
         whos_first = np.random.binomial(1,0.5)
         
         #Do the moves
         if whos_first:
-            e1.attack(e2, decision_1)
-            e2.attack(e1, decision_2) if e2.alive else 0
+            e1.move(decision_1, e2)
+            e2.move(decision_2, e1) if e2.alive else 0
         else:
-            e2.attack(e1, decision_2)
-            e1.attack(e2, decision_1) if e1.alive else 0
+            e2.move(decision_2, e1)
+            e1.move(decision_1, e2) if e1.alive else 0
         
         #Update state
-        env.update_state(e2.health, '1')
-        env.update_state(e1.health, '2')
+        env.update_state()
         
         #Update Agents
         env.inform_agents()
         
+        env.state_1
+        
         if not e2.alive:
             wins_1 += 1
+        
+        game_length += 1
+    
+    game_lengths.append(game_length)
 
 print 'Learner 1 win percentage: ' + str(100*(0.0 + wins_1) / iters) + '%'
 plt.plot(range(iters), eps)

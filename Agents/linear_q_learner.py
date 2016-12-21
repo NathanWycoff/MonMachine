@@ -6,13 +6,25 @@ Created on Tue Dec 13 16:50:57 2016
 @author: nathan
 """
 
+##TODO:: copied weights never reset.
+
 import numpy as np
+import theano
 
 #Q-learner with linear function approx, estimated by minimizing l2 cost using sgd.
 class linear_q_learner(object):
-    def __init__(self, ep_l = 0.1, ep_dyn = 0.9, exploration_decay = 1, \
+    #state_size is an integer stating the dimensionality of the state-space, including bias unit.
+    #state_type is a vector of length state_size, with entry 'C' in cell i if the ith dimension is continiuous and 'D' if it is categorical.
+    def __init__(self, state_size, ep_l = 0.1, ep_dyn = 0.9, exploration_decay = 1, \
                  eta = 0.1, learning_decay = 10, max_err = 10):
-        self.w = np.zeros([12,1])#np.random.normal(size=12, scale = 0.05)
+        #Possible Actions to take each turn
+        self.action_space = ['1','2','3']
+        
+        #Store state space dimension.
+        self.state_size = state_size
+
+        #Initialize Weight vectors.
+        self.w = np.random.normal(size=state_size * len(self.action_space), scale = 0.05)
         self.w_c = np.copy(self.w)
         
         self.alpha = 0.1#Learning Rate
@@ -27,10 +39,10 @@ class linear_q_learner(object):
         self.eta = 0.1#Initial Learning Rate
         self.learning_decay = learning_decay
         
-        self.turn_counter = 0#How many turns have elapsed?
+        #How many turns have elapsed?
+        self.turn_counter = 0
         
-        self.action_space = ['A','B','C']#Possible Actions to take each turn
-        
+        #Error clipping 
         self.clip_err = lambda x: x if abs(x) < max_err else x / abs(x) * max_err
 
     #Called on new turn, for now just increments turn counter and update epsilon
@@ -48,14 +60,17 @@ class linear_q_learner(object):
         
         #Do Stochastic Gradient Descent
         #Only update weights corresponding to the chosen action.
-        act_ind = [0, 4, 8][['A','B','C'].index(self.last_action)]
+        #Next line gets space of possible starting indices.
+        ind_space = range(0, self.state_size * len(self.action_space), self.state_size)
+        #Select the starting index for the action we've selected.
+        act_ind = ind_space[self.action_space.index(self.last_action)]
         
         #Get the design matrix row wrt we are taking the gradient.
         x_vec = self.get_sa(state_last, self.last_action)
         
         delta = prev_guess - (reward + max_a)
         
-        for i in range(4):
+        for i in range(self.state_size):
             j = act_ind + i
             self.w[j] = self.w[j] - self.clip_err(self.eta * 2 * x_vec[j] * delta)
 
@@ -66,31 +81,20 @@ class linear_q_learner(object):
         
         #self.Q[sa_last] = self.Q[sa_last] + self.alpha * (reward + max_a - self.Q[sa_last])
 
-    
-    #Turn the raw input from the environment into its internal state representation.
-    #For this class, it is a row of the design matrix
-    def parse_state(self, state):
-        #If the opponent is still alive, we are in an ingame state.
-        return([float(x) for x in [state[0], state[1] == 'A', state[1] == 'B', state[1] == 'C']])
-        
     #Given a state and action, get the state action vector in the design matrix.
+    ## NEEDS GENERALIZAITION
     def get_sa(self, state, action):
-        #Make sure we've got a valid action
-        assert state[1] in ['A','B','C']
-
-        #Calculate the current state
-        state = np.array([float(x) for x in [1, np.log(abs(state[0])+0.1), state[1] == 'A', state[1] == 'B']])
         
         #The State-Action design matrix is just the state vector in different places
         #depending on the action.
-        if action == 'A':
-            sa = np.append(state, np.zeros([8,1]))
-        if action == 'B':
-            sa = np.zeros([4,1])
+        if action == '1':
+            sa = np.append(state[:], np.zeros([len(state)*2,1]))
+        if action == '2':
+            sa = np.zeros([len(state),1])
             sa = np.append(sa, state[:])
-            sa = np.append(sa, np.zeros([4,1]))
-        if action == 'C':
-            sa = np.append(np.zeros([8,1]), state)
+            sa = np.append(sa, np.zeros([len(state),1]))
+        if action == '3':
+            sa = np.append(np.zeros([len(state)*2,1]), state[:])
             
         return(sa)
     
@@ -109,10 +113,13 @@ class linear_q_learner(object):
             a = self.action_space[np.random.randint(0,len(self.action_space))]
         #Take our current estimate of the best action otherwise.
         else:
-            last_state_Q = [self.Q(state, action) for action in self.action_space]
-            a = self.action_space[last_state_Q.index(max(last_state_Q))]
+            current_state_Q = [self.Q(state, action) for action in self.action_space]
+            a = self.action_space[current_state_Q.index(max(current_state_Q))]
                                   
         #Keep our last action to update Q later
         self.last_action = a
         
         return(a)
+
+#l = linear_q_learner(2)
+#l.get_sa
