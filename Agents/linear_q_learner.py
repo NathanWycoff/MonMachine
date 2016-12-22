@@ -9,7 +9,7 @@ Created on Tue Dec 13 16:50:57 2016
 ##TODO:: copied weights never reset.
 
 import numpy as np
-import theano
+#import theano
 
 #Q-learner with linear function approx, estimated by minimizing l2 cost using sgd.
 class linear_q_learner(object):

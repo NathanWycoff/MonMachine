@@ -209,7 +209,7 @@ n = 100
 p = 1
 out_p = 1
 prop = 0.5
-iters = 600000
+iters = 6000
 
 count_0 = np.floor(n * prop)
 count_1 = n - count_0
