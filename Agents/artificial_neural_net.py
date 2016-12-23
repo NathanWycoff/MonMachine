@@ -77,7 +77,7 @@ class artifical_neural_net(object):
         grads = [T.grad(cost, layer.w) for layer in self.layers]
         
         #Prepare the error truncation function, limits the max absolute gradient.
-        trunc_err = lambda x: x if abs(x) < max_err else np.sign(x) * max_err
+        trunc_err = lambda x: x if T.le(max_err, abs(x)) else x / abs(x) * max_err
         
         #What's going to change when we do sgd, and how?
         updates = [
