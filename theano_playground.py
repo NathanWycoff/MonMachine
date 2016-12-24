@@ -247,7 +247,7 @@ to_merge = [range(x * dups, (x+1) * dups) for x in range(p /dups)]##Input from u
 
 #Initialize guess
 rng = np.random.RandomState(1)
-ann = artifical_neural_net(rng = rng, in_size = p, out_size = 1, h = 0, h_size = 4)
+ann = artificial_neural_net(rng = rng, in_size = p, out_size = 1, h = 0, h_size = 4)
 
 for i in range(iters):
     #Get the current datum
@@ -267,10 +267,15 @@ for i in range(iters):
 neural_mse = cost(X, current_w, y)
 neural_iters = i
 
-class artifical_neural_net(object):
+
+class artificial_neural_net(object):
     """
-    ANN/Multilayer Perceptron. A set of Layers and functions to train them;
-    can merge certain input layers, and split them later in training.
+    ANN/Multilayer Perceptron. A set of Layers and functions to train them using Theano
+    
+    In particular, the class solves regression problems and uses logistic nonlinearity,
+    but it should be simple to modify it to do classification or use other activations funcs.
+    
+    This class can merge certain input features, and split them later in training.
     See: http://papers.nips.cc/paper/531-node-splitting-a-constructive-algorithm-for-feed-forward-neural-networks.pdf
     , except we pick when they are to be merged; it isn't inferred, and we start
     all merged roots at their parents value (no s.d. shift).
@@ -308,8 +313,8 @@ class artifical_neural_net(object):
         
         ##Create and store the layers
         self.layers = []#Storage for layers
-        dim_red = len([item for i, sublist in to_merge for item in sublist])
-        starting_in_size = in_size + len(to_merge) - dim_red
+        dim_red = len([item for sublist in to_merge for item in sublist])
+        starting_in_size = in_size + len(to_merge) - dim_red#Get in_size after merges
         len_in = starting_in_size#The input of the first layer is the dim of the input space
         ID = 0#ID for each layer
         
@@ -329,16 +334,18 @@ class artifical_neural_net(object):
             ID += 1
         
         #Output layer
-        self.layers.append(Layer(rng, in_vec, len_in, out_size, ID))
-        #Use this function to predict vals.
-        self.predict = theano.function([X_var], self.layers[-1].output)
+        self.layers.append(Layer(rng, in_vec, len_in, out_size, '-1'))
+        
+        #Use this function to predict vals, just need to preprocess the X.
+        predict = theano.function([X_var], self.layers[-1].output)
+        self.predict = lambda x: predict(self._get_merged_des_mat(x, self.current_merge))
         
         ##Prepare cost function for SGD
         cost = T.mean(T.square(self.layers[-1].output - y_var))
         grads = [T.grad(cost, layer.w) for layer in self.layers]
         
         #Prepare the error truncation function, limits the max absolute gradient.
-        trunc_err = lambda x: x if T.ge(max_err, abs(x)) else x / abs(x) * max_err
+        trunc_err = lambda x: x if T.le(max_err, abs(x)) else x / abs(x) * max_err
         
         #What's going to change when we do sgd, and how?
         updates = [
@@ -346,7 +353,7 @@ class artifical_neural_net(object):
                 for grad, layer in zip(grads, self.layers)
             ]
             
-        self.sgd = theano.function(inputs = [X_var,y_var], updates = updates)
+        self._sgd = theano.function(inputs = [X_var,y_var], updates = updates)
         
         #Which dims should we merge?
         self.to_merge = to_merge
@@ -367,11 +374,11 @@ class artifical_neural_net(object):
         
         #If there's nothing to merge, don't even bother putting it through the function
         if len(self.to_merge) > 0:
-            self.sgd(self.get_merged_des_mat(x, self.current_merge), y)
+            self._sgd(self._get_merged_des_mat(x, self.current_merge), y)
         else:
-            self.sgd(x, y)
+            self._sgd(x, y)
     
-    def _get_merged_des_mat(X, to_merge = []):
+    def _get_merged_des_mat(self, X, to_merge = []):
         """
         Sums columns of the design matrix together as specified to create a smaller
         design matrix. The purpose of this is to get around Theano inability to 
@@ -379,6 +386,8 @@ class artifical_neural_net(object):
         
         Returns an np.array of reduced dim. if to_merge is an empty list, simply
         returns X. The merged columns are added to the end.
+        
+        Meant for internal use.
         
         :type to_merge: list
         :param to_merge: list of lists, each sublist contains columns to combine.
@@ -391,14 +400,20 @@ class artifical_neural_net(object):
             print "ERR in get_merged_des_mat: Duplicate Columns Merged"
             return(0)
         
+        #Get a list of ALL the merges, including when a column is only be merged with itself.
         not_to_merge = list(set(range(np.shape(X)[1])).difference(merged_inds))
         merged = [[x] for x in not_to_merge] + to_merge
         
+        #Merge every column as specified above.
         return(np.array([sum([X[:,j] for j in l]) for l in merged]).T)
     
-    def _de_merge_w(w, to_merge, which_split, previously_split = []):
+    def _de_merge_w(self, w, to_merge, which_split, previously_split = []):
         """
         Calculates the new weight vector when formerly merged columns are split.
+        
+        Meant for internal use.
+        
+        TODO: Make more readable/simplify code, surely there's a better way to write this.
         
         :type w: np 1d array
         :param w: weight vector to be split
@@ -413,28 +428,36 @@ class artifical_neural_net(object):
         :param previously_split: list of integer indexes of places previously split
         """
         
-        #Create a new merge list for use in this function
-        orig = to_merge[which_split]
-        current_merge = to_merge[:]
-        to_remove = list(np.sort(previously_split))
-        to_remove.reverse()
-        [current_merge.remove(current_merge[i]) for i in to_remove]
-        which_split = current_merge.index(orig)
+        fixed_cols = []
+        for col_i in range(np.shape(w)[1]):
+            #Get the column we'll be operating on
+            w_i = w[:,col_i]
+            
+            #Create a new merge list for use in this function, basically takes care of
+            #interference from previous splits.
+            orig = to_merge[which_split]
+            current_merge = to_merge[:]
+            to_remove = list(np.sort(previously_split))
+            to_remove.reverse()
+            [current_merge.remove(current_merge[i]) for i in to_remove]
+            which_split = current_merge.index(orig)
+            
+            #Get the w of interest, its index, and remove it from the array.
+            w_ind = -(len(current_merge) - which_split)#Get the index of the w we want to split
+            w_val = w_i[w_ind]#Get the w that we want to split.
+            new_cols = current_merge[which_split]#Figure out which cols to add
+            w_ret = np.delete(w_i, w_ind)
+            
+            #Get a flat list of all the other merged columns
+            flat_merged = [item for i, sublist in enumerate(current_merge) for item in sublist if i != which_split]
+            
+            #Get the indices of the weight copies, adjusted for any other mergers and for earlier additions
+            new_inds = [col - sum([x < col for x in flat_merged]) - i for i, col in enumerate(new_cols)]
+            w_new = np.insert(w_ret, new_inds, w_val)
+            
+            fixed_cols.append(w_new)
         
-        #Get the w of interest, its index, and remove it from the array.
-        w_ind = -(len(current_merge) - which_split)#Get the index of the w we want to split
-        w_val = w[w_ind]#Get the w that we want to split.
-        new_cols = current_merge[which_split]#Figure out which cols to add
-        w_ret = np.delete(w, w_ind)
-        
-        #Get a flat list of all the other merged columns
-        flat_merged = [item for i, sublist in enumerate(current_merge) for item in sublist if i != which_split]
-        
-        #Get the indices of the weight copies, adjusted for any other mergers and for earlier additions
-        new_inds = [col - sum([x < col for x in flat_merged]) - i for i, col in enumerate(new_cols)]
-        w_ret = np.insert(w_ret, new_inds, w_val)
-        
-        w_ret = np.reshape(w_ret, [len(w_ret),1])
+        w_ret = np.array(fixed_cols).T
         
         return(w_ret)
         
@@ -448,7 +471,7 @@ class artifical_neural_net(object):
         passed to the class constructor to be split. Refers to ORIGINAL position.
         """
         
-        self.layers[0].set_value(self.de_merge_w(self.layers[0].get_value()), self.to_merge, target, self.prev_split)
+        self.layers[0].set_w(self._de_merge_w(self.layers[0].w.get_value(), self.to_merge, target, self.prev_split))
         self.current_merge.remove(self.to_merge[target])
         self.prev_split.append(target)
                 
@@ -470,8 +493,9 @@ class Layer(object):
         :type len_out: int
         :param len_out: Represents dimensionality of output space of this layer
         
-        :type ID: int
-        :param ID: ID of this layer, for debugging purposes.
+        :type ID: str
+        :param ID: ID of this layer, for debugging purposes. Set to 0 for input, and '-1'
+        for output layer (not required).
         
         :type activation: function
         :param activation: Nonlinearity to be applied at this layer. Default is 
@@ -484,16 +508,32 @@ class Layer(object):
         self.output = activation(self.z)
         
         #Store dims/ID
-        self.ID = ID
+        self.ID = str(ID)
         self.len_in = len_in
         self.len_out = len_out
         
+    def set_w(self, new_val):
+        """
+        Set the weight vector of this layer to some new matrix intelligently. 
+        Stores the new dims so they are printed to the interpreter if this layer
+        is fed to it.
+        
+        Does NOT check that the new value agrees with the next layer.
+        
+        :type new_val: numpy.ndarray
+        :param new_val: new matrix (2d np.array) that the weight vector should take.
+        """
+        self.len_in = np.shape(new_val)[0]
+        self.len_out = np.shape(new_val)[1]
+        self.w.set_value(new_val)
+        
         
     def __str__(self):
-        return("Layer ID: " + str(self.ID) + " of dim " + str(self.len_in) + "x" + str(self.len_out))
+        layer_type = 'Input' if self.ID == '0' else 'Hidden'
+        layer_type = 'Output' if self.ID == '-1' else layer_type
+        return(layer_type + "layer with ID " + str(self.ID) + " of dim " + str(self.len_in) + "x" + str(self.len_out))
         
     __repr__ = __str__
-    
     
 #Control Calculation
 np.random.seed(1)

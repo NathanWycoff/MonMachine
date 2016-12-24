@@ -168,7 +168,7 @@ to_merge = [range(x * dups, (x+1) * dups) for x in range(p /dups)]##Input from u
 
 #Initialize guess
 rng = np.random.RandomState()
-ann = artifical_neural_net(rng = rng, in_size = p, out_size = 1, h = 2, h_size = 4, eta = 0.0001, to_merge = to_merge)
+ann = artificial_neural_net(in_size = p, out_size = 1, h = 2, h_size = 4, eta = 0.0001, to_merge = to_merge, rng = rng)
 
 for i in range(iters):
     #Get the current datum

@@ -7,6 +7,9 @@ A Multi-layer perceptron neural net. Inspired by http://deeplearning.net/tutoria
 and some code portions are copied directly.
 
 Uses Theano to make everything easy and beautiful.
+
+has the ability to merge input dimensions and later split them, as in 
+http://papers.nips.cc/paper/531-node-splitting-a-constructive-algorithm-for-feed-forward-neural-networks.pdf
 """
 
 #Theano is a numerical computation library
@@ -16,7 +19,7 @@ import theano.tensor as T
 #Numpy is as well.
 import numpy as np
 
-class artifical_neural_net(object):
+class artificial_neural_net(object):
     """
     ANN/Multilayer Perceptron. A set of Layers and functions to train them using Theano
     
@@ -28,11 +31,8 @@ class artifical_neural_net(object):
     , except we pick when they are to be merged; it isn't inferred, and we start
     all merged roots at their parents value (no s.d. shift).
     """
-    def __init__(self, rng, in_size, out_size, h, h_size, eta = 0.01, max_err = 10.0, to_merge = []):
+    def __init__(self, in_size, out_size, h, h_size, eta = 0.01, max_err = 10.0, to_merge = [], rng = None):
         """
-        :type rng: numpy.random.RandomState
-        :param rng: a random number generator used to initialize weights
-        
         :type in_size: int
         :param len_in: Dimensionality of input space BEFORE ANY MERGING
         
@@ -54,8 +54,16 @@ class artifical_neural_net(object):
         :type to_merge: list
         :param to_merge: list of lists containing input dimensions which should
         be merged to begin with. 
-        """
         
+        :type rng: numpy.random.RandomState
+        :param rng: a random number generator used to initialize weights. If None, will make one
+        """
+        #Maintain refernce to rng, make one if not provided
+        if rng is None:
+            rng = np.random.RandomState()
+        self.rng = rng
+        
+        #Create symbolic vars
         X_var = T.dmatrix('X')#Represents input
         y_var = T.dmatrix('y')#Represents output
         
@@ -155,7 +163,7 @@ class artifical_neural_net(object):
         #Merge every column as specified above.
         return(np.array([sum([X[:,j] for j in l]) for l in merged]).T)
     
-    def _de_merge_w(self, w, to_merge, which_split, previously_split = []):
+    def _de_merge_w(self, w, to_merge, current_merge, which_split, previously_split = []):
         """
         Calculates the new weight vector when formerly merged columns are split.
         
@@ -176,19 +184,19 @@ class artifical_neural_net(object):
         :param previously_split: list of integer indexes of places previously split
         """
         
+        #Create a new merge list for use in this function, basically takes care of
+        #interference from previous splits.
+        orig = to_merge[which_split]
+        #current_merge = to_merge[:]
+        #to_remove = list(np.sort(previously_split))
+        #to_remove.reverse()
+        #[current_merge.remove(current_merge[i]) for i in to_remove]
+        which_split = current_merge.index(orig)
+        
         fixed_cols = []
         for col_i in range(np.shape(w)[1]):
             #Get the column we'll be operating on
             w_i = w[:,col_i]
-            
-            #Create a new merge list for use in this function, basically takes care of
-            #interference from previous splits.
-            orig = to_merge[which_split]
-            current_merge = to_merge[:]
-            to_remove = list(np.sort(previously_split))
-            to_remove.reverse()
-            [current_merge.remove(current_merge[i]) for i in to_remove]
-            which_split = current_merge.index(orig)
             
             #Get the w of interest, its index, and remove it from the array.
             w_ind = -(len(current_merge) - which_split)#Get the index of the w we want to split
@@ -219,10 +227,28 @@ class artifical_neural_net(object):
         passed to the class constructor to be split. Refers to ORIGINAL position.
         """
         
-        self.layers[0].set_w(self._de_merge_w(self.layers[0].w.get_value(), self.to_merge, target, self.prev_split))
+        self.layers[0].set_w(self._de_merge_w(self.layers[0].w.get_value(), self.to_merge, self.current_merge, target, self.prev_split))
         self.current_merge.remove(self.to_merge[target])
         self.prev_split.append(target)
-                
+        
+    def clone(self):
+        """
+        Return a new artificial_neural_net object with the same properties as this one, including rng state.
+        """
+        #Create a new ann object
+        ret_rnn = artificial_neural_net(in_size = 0, out_size = 0, h = len(self.layers)-1, h_size= 0, rng = self.rng)
+        
+        #Give it our weights
+        [ret_rnn.layers[i].set_w(self.layers[i].w.get_value()) for i in range(len(self.layers))]
+        
+        #Update its merger status
+        ret_rnn.to_merge = self.to_merge[:]
+        ret_rnn.current_merge = self.current_merge[:]
+        ret_rnn.prev_split = self.prev_split[:]
+        
+        return(ret_rnn)
+        
+        
 
 class Layer(object):
     """
