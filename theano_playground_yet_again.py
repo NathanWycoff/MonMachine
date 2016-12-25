@@ -376,3 +376,14 @@ class Layer(object):
         return(layer_type + "layer with ID " + str(self.ID) + " of dim " + str(self.len_in) + "x" + str(self.len_out))
         
     __repr__ = __str__
+    
+    
+max_err = 10.0
+trunc_err = lambda x: x if T.le(max_err, x) else max_err
+
+
+x = T.dscalar('x')
+#y = T.dscalar('y')
+f = T.clip(x, -10.0, 10.0)
+func = theano.function([x], f)
+func(-100.0)

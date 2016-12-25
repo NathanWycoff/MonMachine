@@ -66,7 +66,7 @@ class artificial_neural_net(object):
         #Create symbolic vars
         X_var = T.dmatrix('X')#Represents input
         y_var = T.dmatrix('y')#Represents output
-        g_var = T.wscalar('g')
+        g_var = T.wscalar('g')#Picks one output to do SGD wrt
         
         ##Create and store the layers
         self.layers = []#Storage for layers
@@ -105,12 +105,9 @@ class artificial_neural_net(object):
         cost = T.mean(T.square(self.layers[-1].output[:, g_var] - y_var))
         grads = [T.jacobian(cost, layer.w) for layer in self.layers]
         
-        #Prepare the error truncation function, limits the max absolute gradient.
-        trunc_err = lambda x: x if T.le(max_err, abs(x)) else x / abs(x) * max_err
-        
         #What's going to change when we do sgd, and how?
         updates = [
-            (layer.w, layer.w - eta * trunc_err(grad))
+            (layer.w, layer.w - T.clip(eta * grad, -max_err, max_err))
                 for grad, layer in zip(grads, self.layers)
             ]
             

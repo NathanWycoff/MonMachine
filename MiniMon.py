@@ -119,7 +119,7 @@ class Environment(object):
 
 #Sim Params
 
-iters = 5000
+iters = 100000
 
 #All this just to get the state vector size.
 e1 = ent.random_entity()
@@ -128,7 +128,8 @@ env = Environment(e1, e2)
 state_size = np.shape(env.get_state_vector(env.state_1))[1]
 
 #learner_1 = linear_q_learner(state_size, ep_l = 0.05, learning_decay = 10000, exploration_decay = 1000, eta = 0.5)
-learner_1 = neural_q_learner(state_size, action_size = 3, eps_l = 0.1, eps_dyn = 0.9, h = 0)
+learner_1 = neural_q_learner(state_size, action_size = 3, eps_l = 0.1, eps_dyn = 0.9, \
+    h = 2, eta = 0.001, max_err = 0.1, h_size = 4)
 learner_2 = random_learner(3)
 
 wins_1 = 0
@@ -176,6 +177,8 @@ for it in tqdm.tqdm(range(iters)):
         game_length += 1
     
     game_lengths.append(game_length)
+    
+learner_1.ann.layers[0].w.get_value()
 
 print 'Learner 1 win percentage: ' + str(100*(0.0 + wins_1) / iters) + '%'
 plt.show()
