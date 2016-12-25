@@ -1,209 +1,86 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Dec 21 18:37:48 2016
+Created on Sat Dec 24 15:41:40 2016
 
-@author: Nathan Wycoff
-
-Just learning how to use Theano
+@author: root
 """
 
-import numpy as np
-import theano
 import theano.tensor as T
-import matplotlib.pyplot as plt
+import theano
+import numpy as np
+
 
 ##Generate some data
-n = 10
+n = 10000
 p = 2
-dups = 1
 
 #Design matrix
 X = np.random.normal(size=[n, p-1])
-
-#Add some nonlinearity into the mix
-X_e = np.concatenate([X, np.square(X[:,:2])], axis = 1)
-X_e = np.concatenate([X_e, np.sqrt(abs(X[:,2:4]))], axis = 1)
-X_e = np.concatenate([X_e, np.cos(X[:,4:6])], axis = 1)
-X_e = np.concatenate([X_e, np.exp(X[:,6:8])], axis = 1)
-X_e = np.concatenate([X_e, 1.2 * np.tanh(X[:,6:8])], axis = 1)
-
-#Add intercept col
 X = np.concatenate([np.ones([n, 1]), X], axis = 1)
 
 #True coeffs
-underlying_beta = np.random.normal(size = [p/dups,1], scale = 2)
-beta_true = np.reshape(np.repeat(underlying_beta, dups) + np.random.normal(size = [p], scale = 0.1), [p,1])
 beta_true = np.random.normal(size = [p,2])
 sigma= 0.1
 y = np.dot(X, beta_true) + np.random.normal(size = [n,1], scale = sigma)
 
-##Get control betas by projecting y onto the columnspace of X
-beta_control = np.dot(np.dot(np.linalg.inv(np.dot(X.T, X)), X.T), y)
-
-##############
-## Linear Model
-##############
-##Get betas using sgd/theano
-#Create theano vars
 X_t = T.dmatrix('X')
 y_t = T.dmatrix('y')
-grad_control = T.wvector('g_control')
-
-#Our estimates
-w = T.dmatrix('w')
+w_t = T.dmatrix('w')
+i_t = T.wscalar('i')
 
 
+####Manual sgd
+#Get the cost function
+cost_expr = T.mean(T.square(T.dot(X_t, w_t) - y_t), axis = 0)
+cost_func = theano.function([X_t,w_t,y_t], cost_expr)
 
-#Develop a cost function
-cost_exprs = T.mean(T.square(T.dot(X_t, w) - y_t), axis = 0)
-cost = theano.function([X_t, w, y_t], cost_expr)
-cost(X, current_w, y)
+#Get the jacobian of the whole thing wrt everything
+cost_jac = T.jacobian(cost_expr[i_t], w_t)
+jac_func = theano.function([X_t, w_t, y_t, i_t], cost_jac)
 
-#Get the derivative
-cgs = [T.grad(cost_expr, w) for cost_expr in cost_exprs]
-cost_dw = theano.function([X_t, w, y_t], cg)
+w = np.random.normal(size = [p,2])
 
-
-
-
-
-#Develop a cost function
-cost_expr = T.mean(T.square(T.dot(X_t, w) - y_t))
-cost = theano.function([X_t, w, y_t], cost_expr)
-
-#Get the derivative
-cg = T.grad(cost_expr, w)
-cost_dw = theano.function([X_t, w, y_t], cg)
-
-#Do sgd
-iters = 100000
-thresh = 0.01
-
-#Initialize guess
-current_w = np.random.normal(size = [p, 2])
-eta = 0.01
-linear_iters = 0
-for i in range(iters):
-    #Get the current datum
-    j = i % n
-    x_i = np.reshape(X[j, :], [1,p])
-    y_i = np.reshape(y[j], [1,1])
-    
-    #Get the cost gradient
-    grads = cost_dw(x_i, current_w, y_i)
-    
-    #Do sgd
-    current_w = current_w - eta * grads
-    
-    #Get inf norm
-    err = np.linalg.norm(current_w - beta_true, np.float('inf'))
-    if err < thresh:
-        break
-    
-    linear_iters += 1
-
-#Get MSE for linear
-#linear_mse = cost(X, current_w, y)
-#linear_iters = i
-
-##############
-## Linear Model w/ Splitting
-##############
-##Get betas using sgd/theano
-#Create theano vars
-X_t = T.dmatrix('X')
-y_t = T.dmatrix('y')
-
-#Our estimates
-w = T.dmatrix('w')
-
-#Develop a cost function before split
-cost_expr_b = T.mean(T.square(T.dot(X_t, T.repeat(w,dups)) - y_t))
-cost_b = theano.function([X_t, w, y_t], cost_expr_b)
-
-#Get the derivative before split
-cg_b = T.grad(cost_expr_b, w)
-cost_dw_b = theano.function([X_t, w, y_t], cg_b)
-
-#Develop regular cost func
-cost_expr = T.mean(T.square(T.dot(X_t, w) - y_t))
-cost = theano.function([X_t, w, y_t], cost_expr)
-
-#Get the derivative
-cg = T.grad(cost_expr, w)
-cost_dw = theano.function([X_t, w, y_t], cg)
+jac_func(X, w, y, 1)
 
 
-#Do sgd
-iters = 100000
-thresh = 0.01
+#####SGD using object
+ann = artificial_neural_net(in_size = p, out_size = 2, h = 2, h_size = 4, eta = 0.0001)
 
-#Initialize guess
-current_w = np.random.normal(size = [p/dups, 1])
-eta = 0.01
-split_done = False
-split_thresh = 0.5
-split_iters = 0
-to_merge = [range(x * dups, (x+1) * dups) for x in range(p /dups)]##Input from user
-for i in range(iters):
-    #Get the current datum
-    j = i % n
-    x_i = np.reshape(X[j, :], [1,p])
-    y_i = np.reshape(y[j], [1,1])
-    
-    #Get the cost gradient
-    grads = cost_dw(x_i, current_w, y_i) if split_done else cost_dw_b(x_i, current_w, y_i)
-    
-    
-    #Do sgd
-    current_w = current_w - eta * grads
-    
-    err = np.linalg.norm(current_w - underlying_beta, np.float('inf')) if not split_done else 100
-    if err < split_thresh:
-        split_done = True
-        current_w = np.reshape(np.repeat(current_w, dups), [p,1])
-    
-    #Get inf norm
-    err = np.linalg.norm(current_w - beta_true, np.float('inf')) if split_done else 100
-    if err < thresh:
-        break
-    
-    split_iters += 1
+iters = 1000
 
-split_mse = cost(X, current_w, y)
-
-
-##############
-## Neural Model
-##############
-#Do sgd
-iters = 100000
-thresh = 0.01
-
-#Get the inds to merge
-to_merge = [range(x * dups, (x+1) * dups) for x in range(p /dups)]##Input from user
-
-#Initialize guess
-rng = np.random.RandomState()
-ann = artificial_neural_net(in_size = p, out_size = 2, h = 2, h_size = 4, eta = 0.0001, to_merge = to_merge, rng = rng)
 
 for i in range(iters):
     #Get the current datum
     j = i % n
     x_i = np.reshape(X[j, :], [1,p])
-    y_i = np.reshape(y[j], [2,1])
+    y_i = np.reshape(y[j,0], [1,1])
     
     #Get the cost gradient
-    ann.grad_on(x_i, y_i)
-    
+    ann.grad_on(x_i, y_i, 0)
 
-#Get MSE for linear
-neural_mse = np.mean(pow(y - ann.predict(X),2))
-neural_iters = i
 
-#Utility.
-ann.layers[0].w.get_value()
-[ann.split(i) for i in range(len(to_merge))]
+ann.layers[-1].w.get_value()
+
+## Fake inputs
+X_var = T.dmatrix('X')
+y_var = T.dmatrix('y')
+g_var = T.wscalar('g')
+max_err = 10.0
+eta = 0.00001
+####
+
+
+
+cost = T.mean(T.square(T.dot(X_var, ann.layers[0].w)[:,g_var] - y_var))
+
+cost_func = theano.function([X_var, y_var, g_var], cost)
+cost_func(x_i, 0, y_i)
+
+grads = [T.jacobian(cost, layer.w) for layer in ann.layers]
+
+out = theano.function([X_var, y_var, g_var], outputs = grads)
+out(x_i, y_i, 1)
+
 
 class artificial_neural_net(object):
     """
@@ -217,11 +94,8 @@ class artificial_neural_net(object):
     , except we pick when they are to be merged; it isn't inferred, and we start
     all merged roots at their parents value (no s.d. shift).
     """
-    def __init__(self, rng, in_size, out_size, h, h_size, eta = 0.01, max_err = 10.0, to_merge = []):
+    def __init__(self, in_size, out_size, h, h_size, eta = 0.01, max_err = 10.0, to_merge = [], rng = None):
         """
-        :type rng: numpy.random.RandomState
-        :param rng: a random number generator used to initialize weights
-        
         :type in_size: int
         :param len_in: Dimensionality of input space BEFORE ANY MERGING
         
@@ -243,19 +117,28 @@ class artificial_neural_net(object):
         :type to_merge: list
         :param to_merge: list of lists containing input dimensions which should
         be merged to begin with. 
+        
+        :type rng: numpy.random.RandomState
+        :param rng: a random number generator used to initialize weights. If None, will make one
         """
+        #Maintain refernce to rng, make one if not provided
+        if rng is None:
+            rng = np.random.RandomState()
+        self.rng = rng
         
-        self.in_size = in_size
-        self.out_size = out_size
-        
+        #Create symbolic vars
         X_var = T.dmatrix('X')#Represents input
         y_var = T.dmatrix('y')#Represents output
-        grad_control = T.dmatrix('grad_control')
+        g_var = T.wscalar('g')
         
         ##Create and store the layers
         self.layers = []#Storage for layers
         dim_red = len([item for sublist in to_merge for item in sublist])
         starting_in_size = in_size + len(to_merge) - dim_red#Get in_size after merges
+
+        if starting_in_size < 0:
+            raise ValueError("to_merge is not consistent with in_size")
+            
         len_in = starting_in_size#The input of the first layer is the dim of the input space
         ID = 0#ID for each layer
         
@@ -282,8 +165,8 @@ class artificial_neural_net(object):
         self.predict = lambda x: predict(self._get_merged_des_mat(x, self.current_merge))
         
         ##Prepare cost function for SGD
-        cost = T.mean(T.square((self.layers[-1].output - y_var)))
-        grads = [T.grad(cost, layer.w) for layer in self.layers]
+        cost = T.mean(T.square(self.layers[-1].output[:, g_var] - y_var))
+        grads = [T.jacobian(cost, layer.w) for layer in self.layers]
         
         #Prepare the error truncation function, limits the max absolute gradient.
         trunc_err = lambda x: x if T.le(max_err, abs(x)) else x / abs(x) * max_err
@@ -294,7 +177,7 @@ class artificial_neural_net(object):
                 for grad, layer in zip(grads, self.layers)
             ]
             
-        self._sgd = theano.function(inputs = [X_var, y_var, grad_control], updates = updates)
+        self._sgd = theano.function(inputs = [X_var, y_var, g_var], updates = updates)
         
         #Which dims should we merge?
         self.to_merge = to_merge
@@ -302,33 +185,22 @@ class artificial_neural_net(object):
         self.prev_split = []#Contains the merges we've split
         
         
-    def grad_on(self, x, y, which = None):
+    def grad_on(self, x, y, g):
         """
-        Does sgd on target and updates params. Optionally, only regard one dim of y.
+        Does sgd on target and updates params
         
         These params MUST be matrices (2D numpy arrays), even if the space is
         one dimensional, should be [n,1], not [n,].
         
-        TODO: if we are only doing sgd on one dim of why (i.e., which is not None)
-        there should be a more efficient way of doing the sgd.
-        
-        :type x: np.ndarray
-        :param x: input matrix (regressors)
-        
-        :type y: np.ndarray
-        :param y: output matrix (response)
-        
-        :type which: int
-        :param which: If which is not None, y should be 1x1, and we will only do sgd on 
-        the which'th output in the case that there are multiple output dims.
+        :type x: Input matrix (regressors)
+        :type y: output matrix (response)
         """
         
         #If there's nothing to merge, don't even bother putting it through the function
         if len(self.to_merge) > 0:
-            self._sgd(self._get_merged_des_mat(x, self.current_merge), y)
+            self._sgd(self._get_merged_des_mat(x, self.current_merge), y, g)
         else:
-            self._sgd(x, y)
-                
+            self._sgd(x, y, g)
     
     def _get_merged_des_mat(self, X, to_merge = []):
         """
@@ -359,7 +231,7 @@ class artificial_neural_net(object):
         #Merge every column as specified above.
         return(np.array([sum([X[:,j] for j in l]) for l in merged]).T)
     
-    def _de_merge_w(self, w, to_merge, which_split, previously_split = []):
+    def _de_merge_w(self, w, to_merge, current_merge, which_split, previously_split = []):
         """
         Calculates the new weight vector when formerly merged columns are split.
         
@@ -380,19 +252,19 @@ class artificial_neural_net(object):
         :param previously_split: list of integer indexes of places previously split
         """
         
+        #Create a new merge list for use in this function, basically takes care of
+        #interference from previous splits.
+        orig = to_merge[which_split]
+        #current_merge = to_merge[:]
+        #to_remove = list(np.sort(previously_split))
+        #to_remove.reverse()
+        #[current_merge.remove(current_merge[i]) for i in to_remove]
+        which_split = current_merge.index(orig)
+        
         fixed_cols = []
         for col_i in range(np.shape(w)[1]):
             #Get the column we'll be operating on
             w_i = w[:,col_i]
-            
-            #Create a new merge list for use in this function, basically takes care of
-            #interference from previous splits.
-            orig = to_merge[which_split]
-            current_merge = to_merge[:]
-            to_remove = list(np.sort(previously_split))
-            to_remove.reverse()
-            [current_merge.remove(current_merge[i]) for i in to_remove]
-            which_split = current_merge.index(orig)
             
             #Get the w of interest, its index, and remove it from the array.
             w_ind = -(len(current_merge) - which_split)#Get the index of the w we want to split
@@ -423,10 +295,28 @@ class artificial_neural_net(object):
         passed to the class constructor to be split. Refers to ORIGINAL position.
         """
         
-        self.layers[0].set_w(self._de_merge_w(self.layers[0].w.get_value(), self.to_merge, target, self.prev_split))
+        self.layers[0].set_w(self._de_merge_w(self.layers[0].w.get_value(), self.to_merge, self.current_merge, target, self.prev_split))
         self.current_merge.remove(self.to_merge[target])
         self.prev_split.append(target)
-                
+        
+    def clone(self):
+        """
+        Return a new artificial_neural_net object with the same properties as this one, including rng state.
+        """
+        #Create a new ann object
+        ret_rnn = artificial_neural_net(in_size = 0, out_size = 0, h = len(self.layers)-1, h_size= 0, rng = self.rng)
+        
+        #Give it our weights
+        [ret_rnn.layers[i].set_w(self.layers[i].w.get_value()) for i in range(len(self.layers))]
+        
+        #Update its merger status
+        ret_rnn.to_merge = self.to_merge[:]
+        ret_rnn.current_merge = self.current_merge[:]
+        ret_rnn.prev_split = self.prev_split[:]
+        
+        return(ret_rnn)
+        
+        
 
 class Layer(object):
     """
@@ -486,10 +376,3 @@ class Layer(object):
         return(layer_type + "layer with ID " + str(self.ID) + " of dim " + str(self.len_in) + "x" + str(self.len_out))
         
     __repr__ = __str__
-
-
-
-print linear_iters
-print split_iters
-
-

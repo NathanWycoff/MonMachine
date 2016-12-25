@@ -19,15 +19,12 @@ import matplotlib.pyplot as plt
 import tqdm
 
 #Imports from other files
+#TODO: This only works from iPython, make it work from standard cpython.
 from Agents.linear_q_learner import linear_q_learner
 from Agents.tabular_q_learner import tabular_q_learner
 from Agents.completely_random import random_learner
+from Agents.neural_q_learner import neural_q_learner
 import entities as ent
-
-
-
-        
-
 
 #Feeds information about the game to the learners/agents
 class Environment(object):
@@ -85,17 +82,9 @@ class Environment(object):
         
         #Concat all the vectors into one vector to be returned.
         state_vec = np.concatenate(enhanced_list)
-        state_vec = state_vec.reshape([len(state_vec),1])
+        state_vec = state_vec.reshape([1, len(state_vec)])
         
-        return(state_vec)
-
-        format_categories = lambda x,i: np.array([1 if y == env.state_types[i].index(x) else 0 for y in range(len(env.state_types[i]))])[:-1]
-        
-        #Turn the list into a list of arrays containing either just the continuous
-        #vars or a one hot vector for the categorical vars.
-        enhanced_list = [np.array([x]) if env.state_types[i] == 'C' else \
-             format_categories(x,i) for i,x in enumerate(state_list)]
-        
+        return(state_vec)        
         
     #Inform the agents of the state transitions and of their rewards.
     def inform_agents(self):
@@ -136,15 +125,14 @@ iters = 5000
 e1 = ent.random_entity()
 e2 = ent.random_entity()
 env = Environment(e1, e2)
-state_size = len(env.get_state_vector(env.state_1))
+state_size = np.shape(env.get_state_vector(env.state_1))[1]
 
-learner_1 = linear_q_learner(state_size, ep_l = 0.05, learning_decay = 10000, exploration_decay = 1000, eta = 0.5)
-learner_2 = random_learner()
+#learner_1 = linear_q_learner(state_size, ep_l = 0.05, learning_decay = 10000, exploration_decay = 1000, eta = 0.5)
+learner_1 = neural_q_learner(state_size, action_size = 3, eps_l = 0.1, eps_dyn = 0.9, h = 0)
+learner_2 = random_learner(3)
 
 wins_1 = 0
 
-eps = []
-etas = []
 game_lengths = []
 
 for it in tqdm.tqdm(range(iters)):
@@ -155,15 +143,13 @@ for it in tqdm.tqdm(range(iters)):
     env = Environment(e1, e2)
     env.add_learners(learner_1, learner_2)
     
-    eps.append(learner_1.epsilon)
-    etas.append(learner_1.eta)
     
     game_length = 0
     
     while (not env.game_over):
-        #The agents get to make a decision
-        decision_1 = learner_1.act(env.get_state_vector(env.state_1))
-        decision_2 = learner_2.act(env.get_state_vector(env.state_2))
+        #The agents get to make a decision, these are 1 indexed
+        decision_1 = str(learner_1.act(env.get_state_vector(env.state_1))+1)
+        decision_2 = str(learner_2.act(env.get_state_vector(env.state_2))+1)
         
         #Pick who goes first randomly
         whos_first = np.random.binomial(1,0.5)
@@ -192,7 +178,4 @@ for it in tqdm.tqdm(range(iters)):
     game_lengths.append(game_length)
 
 print 'Learner 1 win percentage: ' + str(100*(0.0 + wins_1) / iters) + '%'
-plt.plot(range(iters), eps)
-plt.plot(range(iters), etas)
 plt.show()
-

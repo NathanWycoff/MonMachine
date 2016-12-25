@@ -66,11 +66,16 @@ class artificial_neural_net(object):
         #Create symbolic vars
         X_var = T.dmatrix('X')#Represents input
         y_var = T.dmatrix('y')#Represents output
+        g_var = T.wscalar('g')
         
         ##Create and store the layers
         self.layers = []#Storage for layers
         dim_red = len([item for sublist in to_merge for item in sublist])
         starting_in_size = in_size + len(to_merge) - dim_red#Get in_size after merges
+
+        if starting_in_size < 0:
+            raise ValueError("to_merge is not consistent with in_size")
+            
         len_in = starting_in_size#The input of the first layer is the dim of the input space
         ID = 0#ID for each layer
         
@@ -97,8 +102,8 @@ class artificial_neural_net(object):
         self.predict = lambda x: predict(self._get_merged_des_mat(x, self.current_merge))
         
         ##Prepare cost function for SGD
-        cost = T.mean(T.square(self.layers[-1].output - y_var))
-        grads = [T.grad(cost, layer.w) for layer in self.layers]
+        cost = T.mean(T.square(self.layers[-1].output[:, g_var] - y_var))
+        grads = [T.jacobian(cost, layer.w) for layer in self.layers]
         
         #Prepare the error truncation function, limits the max absolute gradient.
         trunc_err = lambda x: x if T.le(max_err, abs(x)) else x / abs(x) * max_err
@@ -109,7 +114,7 @@ class artificial_neural_net(object):
                 for grad, layer in zip(grads, self.layers)
             ]
             
-        self._sgd = theano.function(inputs = [X_var,y_var], updates = updates)
+        self._sgd = theano.function(inputs = [X_var, y_var, g_var], updates = updates)
         
         #Which dims should we merge?
         self.to_merge = to_merge
@@ -117,7 +122,7 @@ class artificial_neural_net(object):
         self.prev_split = []#Contains the merges we've split
         
         
-    def grad_on(self, x, y):
+    def grad_on(self, x, y, g):
         """
         Does sgd on target and updates params
         
@@ -130,9 +135,9 @@ class artificial_neural_net(object):
         
         #If there's nothing to merge, don't even bother putting it through the function
         if len(self.to_merge) > 0:
-            self._sgd(self._get_merged_des_mat(x, self.current_merge), y)
+            self._sgd(self._get_merged_des_mat(x, self.current_merge), y, g)
         else:
-            self._sgd(x, y)
+            self._sgd(x, y, g)
     
     def _get_merged_des_mat(self, X, to_merge = []):
         """
