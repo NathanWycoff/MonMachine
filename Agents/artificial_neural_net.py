@@ -31,7 +31,8 @@ class artificial_neural_net(object):
     , except we pick when they are to be merged; it isn't inferred, and we start
     all merged roots at their parents value (no s.d. shift).
     """
-    def __init__(self, in_size, out_size, h, h_size, eta = 0.01, max_err = 10.0, to_merge = [], rng = None):
+    def __init__(self, in_size, out_size, h, h_size, eta = 0.01, max_err = 10.0, \
+        to_merge = [], rng = None, lambda_l1 = 0.1, lambda_l2 = 0.1):
         """
         :type in_size: int
         :param len_in: Dimensionality of input space BEFORE ANY MERGING
@@ -57,6 +58,12 @@ class artificial_neural_net(object):
         
         :type rng: numpy.random.RandomState
         :param rng: a random number generator used to initialize weights. If None, will make one
+        
+        :type lambda_l1: float
+        :param lambda_l1: nonneg coefficient for l1 regularization term
+        
+        :type lambda_l2: float
+        :param lambda_l2: nonneg coefficient for l2 regularization term
         """
         #Maintain refernce to rng, make one if not provided
         if rng is None:
@@ -103,6 +110,8 @@ class artificial_neural_net(object):
         
         ##Prepare cost function for SGD
         cost = T.mean(T.square(self.layers[-1].output[:, g_var] - y_var))
+        cost = cost + lambda_l1 * sum([abs(layer.w).sum() for layer in self.layers])#Add L1 regularization
+        cost = cost + lambda_l2 * sum([(layer.w**2).sum() for layer in self.layers])#Add L1 regularization
         grads = [T.jacobian(cost, layer.w) for layer in self.layers]
         
         #What's going to change when we do sgd, and how?
