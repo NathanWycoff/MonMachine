@@ -9,11 +9,10 @@ and under the programmer's control for prototyping of AI meant to play pokemon.
 
 Use Gaussian Processes to search for the optimal hyperparam combination.
 As in Dernecourt and Lee (2016) link: https://arxiv.org/pdf/1609.08703v1.pdf
-except we look at the highest upper interval instead of the highest mean.
+except we look at Expected Improvement (see GP literature, e.g.
+http://www.ressources-actuarielles.net/ext/isfa/1226.nsf/9c8e3fd4d8874d60c1257052003eced6/f84f7ac703bf5862c12576d8002f5259/$FILE/Jones98.pdf
+) instead of the mean.
 """
-
-import os
-os.chdir('/home/nathan/Documents/Documents/Self Study/MonMachine')
 
 #Numerics Libraries
 import numpy as np
@@ -26,13 +25,21 @@ import tqdm
 from sklearn.gaussian_process.kernels import ConstantKernel, RBF
 import scipy
 
-#Imports from other files
-#TODO: This only works from iPython, make it work from standard cpython.
-from Agents.linear_q_learner import linear_q_learner
-from Agents.tabular_q_learner import tabular_q_learner
+
+#Import my GP funcs
+import sys
+sys.path.append('/home/nathan/Documents/Documents/Self Study/MonMachine/')
+from gp_optimizer import gp_posterior, get_expected_improvement
+
+#Import my learning agents
 from Agents.completely_random import random_learner
 from Agents.neural_q_learner import neural_q_learner
+
+#Import the entities from my game.
 import entities as ent
+
+#Some params
+MAX_GAME_LENGTH = 10
 
 #Feeds information about the game to the learners/agents
 class Environment(object):
@@ -140,8 +147,8 @@ class Environment(object):
             self.game_over = True
             
         #Calculate reward, simply difference in enemy health
-        reward_1 = 0*(int(self.last_state_1[0]) - int(self.state_1[0])) if self.entity_2.alive else 100
-        reward_2 = 0*(int(self.last_state_2[0]) - int(self.state_2[0])) if self.entity_1.alive else 100
+        reward_1 = 0 if self.entity_2.alive else 100
+        reward_2 = 0 if self.entity_1.alive else 100
         
         #I don't intend negative rewards in this game, so I warn when they happen.
         if reward_1 < 0 or reward_2 < 0:
@@ -184,54 +191,7 @@ for h in h_g:
 #Turn to np.array
 X = np.array(X)
 
-def gp_posterior(X, XX, f):
-    """
-    Compute the posterior mean of a gaussian process with SE covariance func.
     
-    Uses Algorithm 2.1 from Rasmussen and Williams.
-    
-    Returns predictive means and variances as np.ndarrays
-    
-    :type X: np.ndarray
-    :param X: matrix (2darray) of train locations.
-    
-    :type XX: np.ndarray
-    :param XX: matrix (2darray) of test locations.
-    
-    :type f: np.ndarray
-    :param f: vector (2d [k,1] array) of train responses.
-    """
-    
-    #Small variance just for numerical stability reasons
-    sigma_sq = 0.001
-    
-    #Heuristic, just put the length-scale at the mean of the distances.
-    l = np.mean(scipy.spatial.distance.pdist(np.vstack([X, XX])))
-        
-    #Get a list of the rows
-    X_row = [X[i,:] for i in range(np.shape(X)[0])]
-    XX_row = [XX[i,:] for i in range(np.shape(XX)[0])]
-    
-    #Calculate K, the covariance matrix
-    k = lambda x,y: np.exp(-0.5 * np.linalg.norm(x - y) / l)
-    K = np.array([[k(x1,x2) for x1 in X_row] for x2 in X_row])
-    KK = np.array([[k(xx,x) for xx in XX_row] for x in X_row])
-    kkk = [k(xx, xx) for xx in XX_row]
-    
-    #Calculate mean
-    L = np.linalg.cholesky(K + sigma_sq * np.identity(np.shape(K)[0]))
-    alpha = np.linalg.solve(np.transpose(L), np.linalg.solve(L, f))
-    mu = np.dot(np.transpose(KK), alpha)
-    
-    #Calculate variance the fast way; have a bug somewhere
-    #vs = [np.linalg.solve(L, KK[i,:]) for i in range(np.shape(KK)[0])]
-    #sig = np.reshape(np.array([kk - np.dot(np.transpose(v), v) for kk, v in zip(kkk, vs)]), [len(vs),1])
-    
-    #This method works, but is slower.
-    sig = 1 - np.diag(np.dot(np.dot(np.transpose(KK), np.linalg.inv(K + sigma_sq * np.identity(np.shape(K)[0]))), KK))
-
-    
-    return(mu, sig)
 
 def function_eval(h_params, train_iters = 10000, eval_iters = 1000):
     """
@@ -257,11 +217,15 @@ def function_eval(h_params, train_iters = 10000, eval_iters = 1000):
     
     #learner_1 = linear_q_learner(state_size, ep_l = 0.05, learning_decay = 10000, exploration_decay = 1000, eta = 0.5)
     learner_1 = neural_q_learner(state_size, action_size = 3, eps_l = 0.1, eps_dyn = 0.9, \
-    h = 2, eta = 0.001, max_err = 0.1, h_size = 4, mem_size = 100)
+        h = h_params[0], h_size = h_params[1], labmda_l1 = h_params[2], \
+        lambda_l2 = h_params[3], mem_size = h_params[4], replay_size = h_params[5], \
+        eta = 0.001, max_err = 0.1)
     learner_2 = random_learner(3)
     
+    print "Training Learner..."
+    
     ####Train the learner
-    for it in range(train_iters):
+    for it in tqdm.tqdm(range(train_iters)):
         
         e1 = ent.random_entity()
         e2 = ent.random_entity()
@@ -294,15 +258,18 @@ def function_eval(h_params, train_iters = 10000, eval_iters = 1000):
             env.state_1
     
     ####Evaluate the learner
+    print "Testing Learner..."
     learner_1.exploring = False
     wins_1 = 0
-    for it in range(test_iters):
+    for it in tqdm.tqdm(range(test_iters)):
         
         e1 = ent.random_entity()
         e2 = ent.random_entity()
         
         env = Environment(e1, e2)
         env.add_learners(learner_1, learner_2)
+        
+        turn_length = 0
         
         while (not env.game_over):
             #The agents get to make a decision, these are 1 indexed
@@ -330,6 +297,11 @@ def function_eval(h_params, train_iters = 10000, eval_iters = 1000):
             
             if not e2.alive:
                 wins_1 += 1
+                
+            turn_length += 1
+            if turn_length > MAX_GAME_LENGTH:
+                print "Game Draw; max length exceeded"
+                break
             
     return(float(wins_1) / test_iters)
    
@@ -338,8 +310,8 @@ def function_eval(h_params, train_iters = 10000, eval_iters = 1000):
 max_iters = 100
 r = 3#Initial random searches.
 
-train_iters = 1000
-test_iters = 1000
+train_iters = 10
+test_iters = 10
 
 
 #Pick initial X's.
@@ -351,15 +323,15 @@ candidates = np.array([X[i,:] for i in range(np.shape(X)[0]) if i not in init_in
 f = np.array([function_eval(list(train[i,:]), train_iters, test_iters) for i in range(np.shape(train)[0])])
 
 #For real do the actual search
-for i in tqdm.tqdm(range(max_iters)):
+for i in range(max_iters):
     #Get the means and variances of the posterior process
     mu, sig = gp_posterior(train, candidates, f)
     
     #Get the top part of our interval
-    int_high = mu + sig
+    ei = get_expected_improvement(mu, sig, max(f))
     
     #Next, look at the configuration with the highest potential.
-    next_eval = np.argmax(int_high)
+    next_eval = np.argmax(ei)
     
     #Evaluate the new method
     train = np.vstack([train, candidates[next_eval,:]])
@@ -367,4 +339,5 @@ for i in tqdm.tqdm(range(max_iters)):
     new_f = function_eval(list(candidates[i,:]), train_iters, test_iters)
     f = np.append(f, new_f)
     
-    
+    print "Last f feval was " + str(f[-1])
+    print "Best was " + str(max(f))

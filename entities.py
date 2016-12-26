@@ -242,6 +242,7 @@ class Entity_C(object):
         #Move 1 defensive. Increase health by an eigth the amount lost.
         if which == '1':
             heal = (self.max_health - self.health) / 8.0
+            heal = 100
             if self.debug > 0:
                 print 'Healed for ' + str(heal)
             self.health += heal
