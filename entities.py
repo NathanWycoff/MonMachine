@@ -13,34 +13,34 @@ See entities_description.txt for more info.
 import numpy as np
 
 class Entity(object):
-    def __init__(self):
-        #Initialize some vars
-        self.health = 1000
-        self.t = ['A' ,'B', 'C'][np.random.randint(0,3)]
-        self.alive = True
-        
-    #Attack another entity.
-    #target should be of class Entity.
-    #t should be in {'A','B','C'}, and specifies attack type
-    def attack(self, target, t):
-        damage = [100.0, 110.0, 120.0][['A', 'B', 'C'].index(t)]
-        damage += max(0, np.random.normal(scale=20))
-        damage = 2 * damage if target.t == t else damage#Double damage on like types.
-        target.take_damage(damage)
-    
-    
+    """Entities are the equivalent of Pokemon in Minimon"""
     def take_damage(self, amount):
+        """
+        Called by other entites attacking this one.
+        
+        :type amount: float
+        :param amount: Amount of damage.
+        """
         self.health -= amount
         if self.health <= 0.0:
+            if self.debug > 0:
+                print 'Entity Dies!'
             self.alive = False
     
+    def no_target_err(self):
+        print "ERR: Specify a target for offensive moves"
+        
     def __str__(self):
         return "Entity of type " + self.t + " with " + str(self.health) + " health."
 
     __repr__ = __str__
 
-class Entity_A(object):
+class Entity_A(Entity):
     def __init__(self, debug = 0):
+        """
+        :type debug: int
+        :param debug: Verbosity of Mon, 0 is nothing, 1 is something.
+        """
         #Set health stats
         self.health = 500.0
         self.alive = True
@@ -57,8 +57,16 @@ class Entity_A(object):
         self.t = 'A'
         
     
-    #Make the entity execute a move
     def move(self, which, target = None):
+        """
+        Make the entity execute a move
+        
+        :type which: int
+        :param which: Which move to execute. Should be in {'1', '2', '3'}.
+        
+        :type target: Entity
+        :param target: For offensive moves, which Entity to attack. For other moves, ignored.
+        """
         #Move 1 defensive, permanently cause opponents to deal no damage with
         #probability 0.5. Doing this move twice has no effect.
         if which == '1':
@@ -111,26 +119,16 @@ class Entity_A(object):
             if self.debug > 0:
                 print 'Attack hits for ' + str(damage) + ' damage.'
             target.take_damage(damage)
+        else:
+            raise ValueError("move should be in {'1','2',3'}")
             
-    #Called by other entites attacking this one.
-    def take_damage(self, amount):
-        self.health -= amount
-        if self.health <= 0.0:
-            if self.debug > 0:
-                print 'Entity Dies!'
-            self.alive = False
-    
-    def no_target_err(self):
-        print "ERR: Specify a target for offensive moves"
-        
-    def __str__(self):
-        return "Entity of type " + self.t + " with " + str(self.health) + " health."
-
-    __repr__ = __str__
-        
-
-class Entity_B(object):
+class Entity_B(Entity):
     def __init__(self, debug = 0):
+        """
+        :type debug: int
+        :param debug: Verbosity of Mon, 0 is nothing, 1 is something.
+        """
+        
         #Set health stats
         self.health = 1000.0
         self.alive = True
@@ -147,8 +145,16 @@ class Entity_B(object):
         self.t = 'B'
         
     
-    #Make the entity execute a move
     def move(self, which, target = None):
+        """
+        Make the entity execute a move
+        
+        :type which: int
+        :param which: Which move to execute. Should be in {'1', '2', '3'}.
+        
+        :type target: Entity
+        :param target: For offensive moves, which Entity to attack. For other moves, ignored.
+        """
         #Move 1 tactical, increase damage multiplier by 1.5 each time
         #this move is performed.
         if which == '1':
@@ -201,26 +207,15 @@ class Entity_B(object):
             if self.debug > 0:
                 print 'Attack hits for ' + str(damage) + ' damage.'
             target.take_damage(damage)
-            
-    #Called by other entites attacking this one.
-    def take_damage(self, amount):
-        self.health -= amount
-        if self.health <= 0.0:
-            if self.debug > 0:
-                print 'Entity Dies!'
-            self.alive = False
-    
-    def no_target_err(self):
-        print "ERR: Specify a target for offensive moves"
-        
-    def __str__(self):
-        return "Entity of type " + self.t + " with " + str(self.health) + " health."
+        else:
+            raise ValueError("move should be in {'1','2',3'}")
 
-    __repr__ = __str__
-        
-
-class Entity_C(object):
+class Entity_C(Entity):
     def __init__(self, debug = 0):
+        """
+        :type debug: int
+        :param debug: Verbosity of Mon, 0 is nothing, 1 is something.
+        """
         #Set health stats
         self.health = 1500.0
         self.alive = True
@@ -237,12 +232,19 @@ class Entity_C(object):
         self.t = 'C'
         
     
-    #Make the entity execute a move
     def move(self, which, target = None):
+        """
+        Make the entity execute a move
+        
+        :type which: int
+        :param which: Which move to execute. Should be in {'1', '2', '3'}.
+        
+        :type target: Entity
+        :param target: For offensive moves, which Entity to attack. For other moves, ignored.
+        """
         #Move 1 defensive. Increase health by an eigth the amount lost.
         if which == '1':
             heal = (self.max_health - self.health) / 8.0
-            heal = 100
             if self.debug > 0:
                 print 'Healed for ' + str(heal)
             self.health += heal
@@ -294,25 +296,12 @@ class Entity_C(object):
             if self.debug > 0:
                 print 'Attack hits for ' + str(damage) + ' damage.'
             target.take_damage(damage)
-            
-    #Called by other entites attacking this one.
-    def take_damage(self, amount):
-        self.health -= amount
-        if self.health <= 0.0:
-            if self.debug > 0:
-                print 'Entity Dies!'
-            self.alive = False
+        else:
+            raise ValueError("move should be in {'1','2',3'}")
     
-    def no_target_err(self):
-        print "ERR: Specify a target for offensive moves"
-        
-    def __str__(self):
-        return "Entity of type " + self.t + " with " + str(self.health) + " health."
 
-    __repr__ = __str__
-
-#Return a random entity
 def random_entity(debug = 0):
+    """Return a random entity"""
     a = np.random.randint(0,3)
     if a == 0:
         return(Entity_A(debug = debug))
@@ -320,11 +309,3 @@ def random_entity(debug = 0):
         return(Entity_B(debug = debug))
     if a == 2:
         return(Entity_C(debug = debug))
-    print 'Error in random_entity'
-
-#Testing
-#a1 = Entity_A(debug = 1)
-#a2 = Entity_C(debug = 1)
-#a1.move(2, a2)
-#a2.move(1)
-

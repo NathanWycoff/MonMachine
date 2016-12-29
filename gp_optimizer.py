@@ -70,10 +70,10 @@ def get_expected_improvement(mus, sigs, current_max):
     The optimal choice is the one with the biggest EI.
     
     :type mus: np.ndarray
-    :param mus: vector of means on testing grid
+    :param mus: vector of means on testing grid from GP posterior
     
     :type sigs: np.ndarray
-    :param sigs: vector of variances on testing grid
+    :param sigs: vector of variances on testing grid from GP posterior
     
     :type current_max: float
     :param current_max: Value of currently discovered maximum.
@@ -84,7 +84,8 @@ def get_expected_improvement(mus, sigs, current_max):
     sds = np.sqrt(sigs)#These have the same variance, get their sqrt.
     
     #Calculate the expected improvement (ei)
-    phi = norm.cdf
-    ei = (current_min - mus) * phi((current_min - mus) / sds) + sds * phi((current_min - mus) / sds)
+    PHI = norm.cdf
+    phi = norm.pdf
+    ei = (current_min - mus) * PHI((current_min - mus) / sds) + sds * phi((current_min - mus) / sds)
     
     return(ei)

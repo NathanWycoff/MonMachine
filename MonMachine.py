@@ -2,32 +2,32 @@
 """
 Created on Wed Nov  9 22:44:58 2016
 
-@author: nathan
+@author: Nathan Wycoff
+
+This script interfaces with Pokemon Showdown.
+
+It is not complete.
+
+It relays rudimentary game information to rudimentary agents. More advanced
+agents are being prototyped using MiniMon, see MiniMon.py and ./Agents
 """
 
-# -*- coding: utf-8 -*-
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import Select
-from selenium.common.exceptions import NoSuchElementException
-from selenium.common.exceptions import NoAlertPresentException
-import unittest, time, re
+import time, re
 import numpy as np
 import csv
 
 
-#Represents a pokemon
 class Mon(object):
-    #Initialize some stuff
+    """Represents a Pokemon"""
     def __init__(self, ID):
         self.ID = ID#What number in the roster?
         self.is_alive = True
         self.hp = 100.0
         self.status = 'Healthy'
     
-    #When a mon takes damage, record it here.
     def damage(self, amount):
+        """When a Mon takes damage, record it here"""
         self.hp = max(0, self.hp - amount)
         
         print str(self) + " took " + str(amount) + " damage."
@@ -42,17 +42,17 @@ class Mon(object):
         
     __repr__ = __str__
             
-#Handles Mons
 class MonWrangler(object):
+    """Handles a collection of Mons"""
     def __init__(self, mons):
         self.mons = mons
     
-    #Get a mon, specified by ID
     def get_mon(self, ID):
+        """Get a mon, specified by ID"""
         return(self.mons[ID-1])
     
-    #Pick the number of a random alive mon
     def get_random_alive_mon(self):
+        """Pick the number of a random alive mon"""
         alive_mons = [x for x in self.mons if x.is_alive]
         d = np.random.randint(0,len(alive_mons))
         if d > 0:
@@ -60,13 +60,13 @@ class MonWrangler(object):
         else:
             return(None)
     
-    #Track a dead mon
     def kill(self, ID):
+        """Track a dead mon"""
         print "Pokemon " + str(ID) + " died. RIP in Peace"
         self.mons[ID-1].is_alive = False
     
-#An entry in the log
 class Entry(object):
+    """An entry in the game log"""
     def __init__(self, ID, text):
         self.ID = ID
         self.text = unicode(text).encode('ascii','ignore')
@@ -80,23 +80,23 @@ class Entry(object):
     
     __repr__ = __str__
 
-#Handles entries to make sure that we process each
 class EntryManager(object):
-    #Start with an empty list of entries
+    """Handles entries to make sure that we process each"""
     def __init__(self):
+        """Start with an empty list of entries"""
         self.entry_list = []
         self.entry_IDs = []
     
-    #Register new entries into our list if we don't have them already
     def register_entries(self, entries):
+        """Register new entries into our list if we don't have them already"""
         new_entries = [[i,x] for i,x in enumerate(entries) if i not in self.entry_IDs]
         for entry in new_entries:
             self.entry_list.append(Entry(entry[0],entry[1]))
         
         self.entry_IDs = [x.ID for x in self.entry_list]
     
-    #Return any entries not yet handled.
     def get_unhandled_entries(self):
+        """Return any entries not yet handled."""
         return([x for x in self.entry_list if not x.handled])
         
     
@@ -105,9 +105,10 @@ class EntryManager(object):
 
 ##Prepare some stuff before startup
 
-#Takes data from the webbrowser and feeds it to the agent in a 
-#reinfocerment learning theoretic manner.
 class Environment(object):
+    """
+    Takes data from the webbrowser and feeds it to the agent in a reinfocerment 
+    learning theoretic manner."""
     def __init__(self, log, agent):
         print "Environment is initing..."
         
@@ -115,8 +116,8 @@ class Environment(object):
         self.agent = agent
         
         #Roster of mons for us and them
-        self.kevin = MonWrangler([Mon(x) for x in [1,2,3,4,5,6]])
-        self.charles = MonWrangler([Mon(x) for x in [1,2,3,4,5,6]])
+        self.our_mon_wrang = MonWrangler([Mon(x) for x in [1,2,3,4,5,6]])
+        self.their_mon_wrang = MonWrangler([Mon(x) for x in [1,2,3,4,5,6]])
         
         #To handle log entries
         self.entry_manager = EntryManager()
@@ -131,14 +132,13 @@ class Environment(object):
         
         #Initialize some things
         self.current_turn = 0
-        self.current_mon = self.kevin.get_mon(1)
+        self.current_mon = self.our_mon_wrang.get_mon(1)
         
         #Are we currently in a game?
         self.in_game = False
     
-    #Check the log for updates and take the appropriate actions
     def refresh(self):
-        #print "Refreshing..."
+        """Check the log for updates and take the appropriate actions"""
         #See if there's anything new
         self.entry_manager.register_entries(self.log.text.split('\n'))
         
@@ -200,8 +200,8 @@ class Environment(object):
             
             entry_obj.handled = True
                         
-    #Main action function, for now move randomly
     def take_turn(self):
+        """Main action function, prompt agent for action"""
         d = self.agent.act(self.current_mon.ID)
         self.agent.reward(0.0, self.current_mon.ID)
         try:
@@ -212,34 +212,36 @@ class Environment(object):
         
     
     def switch_to_mon(self, mon):
+        """Called when switching active pokemon in game"""
         self.current_mon = mon
         to = mon.ID
         print "Switching to mon " + str(mon)
         driver.find_element_by_css_selector('.switchmenu > button:nth-child(' + str(to) + ')').click()
         #driver.find_element_by_xpath("(//button[@name='chooseSwitch'])[" + str(to) + "]").click()
     
-    #Called when one of our mons die :(
-    #For now, just summon a random mon
     def funeral(self):
-        self.kevin.kill(self.current_mon.ID)
+        """Called when one of our mons die :(
+        For now, just summon a random mon
+        """
+        self.our_mon_wrang.kill(self.current_mon.ID)
         if False:#Next Mon is random
-            next_mon = self.kevin.get_random_alive_mon()
+            next_mon = self.our_mon_wrang.get_random_alive_mon()
             if next_mon is not None:
                 self.switch_to_mon(next_mon)
         else:
             try:
-                next_mon = self.kevin.get_mon(self.current_mon.ID + 1)
+                next_mon = self.our_mon_wrang.get_mon(self.current_mon.ID + 1)
                 self.switch_to_mon(next_mon)
             except:
                 print "Out of Mons!"
     
-    #This function updates the turn counter and prints it out.
     def update_turn(self, turn):        
+        """This function updates the turn counter and prints it out."""
         self.current_turn = int(turn)
         print "It is now turn " + str(turn)
 
-#Q learning with epsilon greedy action selection
 class Agent(object):
+    """Tabular Q learning with epsilon greedy action selection"""
     def __init__(self, load = False):
         #Parameters
         self.epsilon = 0.5#Probability of exploratory action
@@ -267,8 +269,8 @@ class Agent(object):
         self.last_state = 1
         self.last_action = 1
     
-    #Get an action from an epsilon greedy policy.
     def act(self, state):
+        """Get an action from an epsilon greedy policy."""
         #If we do a random action
         if (np.random.uniform() < self.epsilon):
             print 'Taking an exploratory action.'
@@ -284,8 +286,8 @@ class Agent(object):
         
         return(action)
     
-    #Call when a reward is given to update Q and V
     def reward(self, reward, new_state):
+        """Call when a reward is given to update Q and V"""
         #Update Q
         optimal_value = max(self.Q[new_state-1]) if new_state != 'Terminal' else 0
         current_q = self.Q[self.last_state-1][self.last_action-1]
@@ -298,6 +300,7 @@ class Agent(object):
             self.V[i] = sum([self.epsilon / 3.0 * self.Q[i][x-1] if x != optimal_action else self.epsilon * self.Q[i][x-1] for x in self.action_space])
     
     def save(self):
+        """Save learned table"""
         target = '/home/nathan/Documents/Self Study/MonMachine/learned_Q.csv'
         with open(target, 'w') as f:
             writer = csv.writer(f)
@@ -334,25 +337,7 @@ time.sleep(1)
 driver.find_element_by_name("password").send_keys("Stats2016")
 time.sleep(1)
 driver.find_element_by_css_selector("button[type=\"submit\"]").click()
-#time.sleep(3)
-#
-#driver.find_element_by_name("format").click()
-#time.sleep(1)
-#driver.find_element_by_xpath("(//button[@name='selectFormat'])[51]").click()
-#time.sleep(1)
-#
-#original_url = driver.current_url#Until the search page loads, wait
-#
-#driver.find_element_by_name("search").click()
-#time.sleep(1)
-#
-##Wait for the battle to load
-#while driver.current_url == original_url:
-#    time.sleep(1)
 
-#
-#Repeatedly play someone
-#
 
 games = 0
 while True:

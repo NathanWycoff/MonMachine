@@ -10,7 +10,12 @@ Uses Theano to make everything easy and beautiful.
 
 has the ability to merge input dimensions and later split them, as in 
 http://papers.nips.cc/paper/531-node-splitting-a-constructive-algorithm-for-feed-forward-neural-networks.pdf
+
+Intended for use in Q learning.
 """
+
+import os
+os.environ["THEANO_FLAGS"] = "exception_verbosity=high"
 
 #Theano is a numerical computation library
 import theano 
@@ -29,13 +34,13 @@ class artificial_neural_net(object):
     This class can merge certain input features, and split them later in training.
     See: http://papers.nips.cc/paper/531-node-splitting-a-constructive-algorithm-for-feed-forward-neural-networks.pdf
     , except we pick when they are to be merged; it isn't inferred, and we start
-    all merged roots at their parents value (no s.d. shift).
+    all merged roots at their parent's value (no s.d. shift).
     """
-    def __init__(self, in_size, out_size, h, h_size, eta = 0.01, max_err = 10.0, \
+    def __init__(self, in_size, out_size, h, h_size, intercept = True, eta = 0.01, max_err = 10.0, \
         to_merge = [], rng = None, lambda_l1 = 0.1, lambda_l2 = 0.1):
         """
         :type in_size: int
-        :param len_in: Dimensionality of input space BEFORE ANY MERGING
+        :param len_in: Dimensionality of input space before any merging
         
         :type out_size: int
         :param len_out: Dimensionality of output space
@@ -45,6 +50,9 @@ class artificial_neural_net(object):
         
         :type h_size: uint
         :param h_size: Nodes per hidden layer
+        
+        :type intercept: bool
+        :param intercept: Will X (regressor) data provided contain an intercept column?
         
         :type eta: double
         :param eta: non-negative learning rate; premultiplies gradient in sgd
@@ -79,7 +87,7 @@ class artificial_neural_net(object):
         self.layers = []#Storage for layers
         dim_red = len([item for sublist in to_merge for item in sublist])
         starting_in_size = in_size + len(to_merge) - dim_red#Get in_size after merges
-
+        
         if starting_in_size < 0:
             raise ValueError("to_merge is not consistent with in_size")
             
@@ -88,12 +96,14 @@ class artificial_neural_net(object):
         
         #Hidden layers
         in_vec = X_var#Start the pipeline
+        bias = not intercept#If the X mat has an intercept, the first unit doesn't need bias.
         for i in range(h):
             #Create a layer and append it.
-            self.layers.append(Layer(rng, in_vec, len_in, h_size, ID, T.nnet.nnet.sigmoid))
+            self.layers.append(Layer(rng, in_vec, len_in, h_size, ID, T.nnet.nnet.sigmoid, bias))
             
-            #From 1st iter on, input will be hidden size.
+            #From 1st iter on, input will be hidden size, and we will have bias
             len_in = h_size
+            bias = True
             
             #Append the output of the last layer to the calculation
             in_vec = self.layers[-1].output
@@ -102,7 +112,8 @@ class artificial_neural_net(object):
             ID += 1
         
         #Output layer
-        self.layers.append(Layer(rng, in_vec, len_in, out_size, '-1'))
+        bias = bias if not h == 0 else not intercept
+        self.layers.append(Layer(rng, in_vec, len_in, out_size, '-1', bias = bias))
         
         #Use this function to predict vals, just need to preprocess the X.
         predict = theano.function([X_var], self.layers[-1].output)
@@ -266,7 +277,7 @@ class Layer(object):
     Respresents one layer of a neural net, based off the deeplearning tutorial 
     at http://deeplearning.net/tutorial/mlp.html
     """
-    def __init__(self, rng, in_vec, len_in, len_out, ID = '0', activation = lambda x: x):
+    def __init__(self, rng, in_vec, len_in, len_out, ID = '0', activation = lambda x: x, bias = True):
         """
         :type in_vec: theano.tensor.TensorType
         :param in_vec: symbolic variable that describes the input of the
@@ -285,10 +296,18 @@ class Layer(object):
         :type activation: function
         :param activation: Nonlinearity to be applied at this layer. Default is 
         identity.
+        
+        :type bias: bool
+        :param bias: Do we add a bias unit to this layer?
         """
         
+        #Add bias if necessary
+        self.bias = bias
+        if bias:
+            in_vec = T.concatenate([T.ones([T.shape(in_vec)[0], 1]), in_vec], axis = 1)
+        
         #Initialize this layer's weights
-        self.w = theano.shared(np.asarray(rng.normal(size = [len_in, len_out])), 'w' + str(ID))
+        self.w = theano.shared(np.asarray(rng.normal(size = [len_in + int(bias), len_out])), 'w' + str(ID))
         self.z = T.dot(in_vec, self.w)
         self.output = activation(self.z)
         
@@ -316,6 +335,7 @@ class Layer(object):
     def __str__(self):
         layer_type = 'Input' if self.ID == '0' else 'Hidden'
         layer_type = 'Output' if self.ID == '-1' else layer_type
-        return(layer_type + "layer with ID " + str(self.ID) + " of dim " + str(self.len_in) + "x" + str(self.len_out))
+        bias_message = " (+ bias)" if self.bias else " (no bias)"
+        return(layer_type + "layer with ID " + str(self.ID) + " of dim " + str(self.len_in) + "x" + str(self.len_out) + bias_message)
         
     __repr__ = __str__

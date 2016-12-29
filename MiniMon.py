@@ -16,30 +16,24 @@ http://www.ressources-actuarielles.net/ext/isfa/1226.nsf/9c8e3fd4d8874d60c125705
 
 #Numerics Libraries
 import numpy as np
-import matplotlib.pyplot as plt
 
 #Convenience libraries
 import tqdm
 
-#Import GP stuff
-from sklearn.gaussian_process.kernels import ConstantKernel, RBF
-import scipy
-
-
-#Import my GP funcs
+##Import my other stuff YOU SHOULD CHANGE THIS LINE
 import sys
 sys.path.append('/home/nathan/Documents/Documents/Self Study/MonMachine/')
+
+#Import GP optimization funcs.
 from gp_optimizer import gp_posterior, get_expected_improvement
 
 #Import my learning agents
 from Agents.completely_random import random_learner
 from Agents.neural_q_learner import neural_q_learner
+from Agents.human_agent import Human_Agent
 
 #Import the entities from my game.
 import entities as ent
-
-#Some params
-MAX_GAME_LENGTH = 10
 
 #Feeds information about the game to the learners/agents
 class Environment(object):
@@ -63,14 +57,14 @@ class Environment(object):
         self.entity_2 = e2
         
         #Create state variables
-        self.state_1 = [1, e2.health, e2.t, e2.p_miss, e2.d]
-        self.state_2 = [1, e1.health, e1.t, e1.p_miss, e1.d]
+        self.state_1 = [1, e1.health, e1.t, e1.p_miss, e1.d, e2.health, e2.t, e2.p_miss, e2.d]
+        self.state_2 = [1, e2.health, e2.t, e2.p_miss, e2.d, e1.health, e1.t, e1.p_miss, e1.d]
         self.last_state_1 = self.state_1[:]
         self.last_state_2 = self.state_2[:]
 
         #Declare state types; for use when creating state vector
         #'C' means continuous. If its categorical, give a list containing possible vals.
-        self.state_types = ['C', 'C', ['A', 'B', 'C'], 'C', 'C']
+        self.state_types = ['C', 'C', ['A', 'B', 'C'], 'C', 'C', 'C', ['A', 'B', 'C'], 'C', 'C']
         
         #When the game ends, the loop will end.
         self.game_over = False
@@ -99,11 +93,13 @@ class Environment(object):
         """
         #Update state for agent 1
         self.last_state_1 = self.state_1[:]
-        self.state_1 = [1, np.log(abs(self.entity_2.health) + 0.1), self.entity_2.t, self.entity_2.p_miss, self.entity_2.d]
+        self.state_1 = [1, self.entity_1.health, self.entity_1.t, self.entity_1.p_miss,\
+            self.entity_1.d, self.entity_2.health, self.entity_2.t, self.entity_2.p_miss, self.entity_2.d]
             
         #Update state for agent 2
         self.last_state_2 = self.state_2[:]
-        self.state_2 = [1, np.log(abs(self.entity_1.health) + 0.1), self.entity_1.t, self.entity_1.p_miss, self.entity_1.d]
+        self.state_2 = [1, self.entity_2.health, self.entity_2.t, self.entity_2.p_miss,\
+            self.entity_2.d, self.entity_1.health, self.entity_1.t, self.entity_1.p_miss, self.entity_1.d]
 
     #Turn a state list into a state vector for learner consumption.
     def get_state_vector(self, state_list):   
@@ -165,40 +161,14 @@ class Environment(object):
         self.agent_2.update(self.get_state_vector(self.last_state_2), \
                             self.get_state_vector(self.state_2), reward_2)
 
-###
-####Evaluate agents
-###
-#Evaluate neural nets with different hyper params as compared to a random agent.
-#hyper params to eval: [h, h_size, lambda_l1, lambda_l2, mem_size, replay_size]
-#Specify different levels to eval
-h_g = [0,1,2,3]
-h_size_g = [2, 4, 8, 16, 32, 64]
-lambda_l1_g = [0.001, 0.01, 0.1, 1, 10]
-lambda_l2_g = [0.001, 0.01, 0.1, 1, 10]
-mem_size_g = [10, 100, 1000]
-replay_size_g = [10, 100, 1000]
-
-#Create all possible combinations
-X = []
-for h in h_g:
-    for h_size in h_size_g:
-        for l1 in lambda_l1_g:
-            for l2 in lambda_l2_g:
-                for mem in mem_size_g:
-                    for rep in replay_size_g:
-                        X.append([h, h_size, l1, l2, mem, rep])
-
-#Turn to np.array
-X = np.array(X)
-
     
 
-def function_eval(h_params, train_iters = 10000, eval_iters = 1000):
+def function_eval(h_params, train_iters = 10000, test_iters = 1000, max_game_length = 10):
     """
     Evaluate a hyperparam configuration by training and testing it against a 
     random agent.
     
-    Returns their win rate (in [0,100])
+    Returns their win rate (in [0,1])
     
     :type h_params: list
     :param h_params: list of hyperparams [h, h_size, lambda_1, lambda_2, mem_size, replay_size]
@@ -208,21 +178,27 @@ def function_eval(h_params, train_iters = 10000, eval_iters = 1000):
     
     :type test_iters: int
     :param test_iters: nonneg number of games played during evaluation
+    
+    :type max_game_length: int
+    :param max_game_length: Number of turns before game is drawn in test mode.
     """
+    
     #All this just to get the state vector size.
     e1 = ent.random_entity()
     e2 = ent.random_entity()
     env = Environment(e1, e2)
     state_size = np.shape(env.get_state_vector(env.state_1))[1]
     
-    #learner_1 = linear_q_learner(state_size, ep_l = 0.05, learning_decay = 10000, exploration_decay = 1000, eta = 0.5)
     learner_1 = neural_q_learner(state_size, action_size = 3, eps_l = 0.1, eps_dyn = 0.9, \
-        h = h_params[0], h_size = h_params[1], labmda_l1 = h_params[2], \
+        h = h_params[0], h_size = h_params[1], lambda_l1 = h_params[2], \
         lambda_l2 = h_params[3], mem_size = h_params[4], replay_size = h_params[5], \
-        eta = 0.001, max_err = 0.1)
+        eta = 0.1, max_err = 0.1)
+    #learner_1 = Human_Agent(1, 3)
     learner_2 = random_learner(3)
     
     print "Training Learner..."
+    
+    wins_1 = 0
     
     ####Train the learner
     for it in tqdm.tqdm(range(train_iters)):
@@ -233,9 +209,12 @@ def function_eval(h_params, train_iters = 10000, eval_iters = 1000):
         env = Environment(e1, e2)
         env.add_learners(learner_1, learner_2)
         
+        turn_length = 0
+        
         while (not env.game_over):
             #The agents get to make a decision, these are 1 indexed
             decision_1 = str(learner_1.act(env.get_state_vector(env.state_1))+1)
+            #decision_1 = str(learner_1.act(env.state_1)+1)#Uncomment this line if human agent.
             decision_2 = str(learner_2.act(env.get_state_vector(env.state_2))+1)
             
             #Pick who goes first randomly
@@ -255,12 +234,20 @@ def function_eval(h_params, train_iters = 10000, eval_iters = 1000):
             #Update Agents
             env.inform_agents()
             
-            env.state_1
+            if not e2.alive:
+                wins_1 += 1
+            
+            turn_length += 1
+            
+            if turn_length > max_game_length:
+                #print "Game Draw; max length exceeded"
+                break
     
     ####Evaluate the learner
     print "Testing Learner..."
     learner_1.exploring = False
-    wins_1 = 0
+    wins = 0
+    draws = 0
     for it in tqdm.tqdm(range(test_iters)):
         
         e1 = ent.random_entity()
@@ -299,33 +286,63 @@ def function_eval(h_params, train_iters = 10000, eval_iters = 1000):
                 wins_1 += 1
                 
             turn_length += 1
-            if turn_length > MAX_GAME_LENGTH:
-                print "Game Draw; max length exceeded"
+            if turn_length > max_game_length:
+                #print "Game Draw; max length exceeded"
+                draws += 1
                 break
             
+    print float(wins) / test_iters
+    print float(draws) / test_iters
+    
+    
     return(float(wins_1) / test_iters)
-   
+
+
+###
+####Evaluate agents
+###
+#Evaluate neural nets with different hyper params as compared to a random agent.
+#hyper params to eval: [h, h_size, lambda_l1, lambda_l2, mem_size, replay_size]
+#Specify different levels to eval
+h_g = [0,1,2,3]
+h_size_g = [2, 4, 8, 16, 32, 64]
+lambda_l1_g = [0.001, 0.01, 0.1, 1, 10]
+lambda_l2_g = [0.001, 0.01, 0.1, 1, 10]
+mem_size_g = [10, 100, 1000]
+replay_size_g = [0, 10, 100]
+
+#Create all possible combinations
+X = []
+for h in h_g:
+    for h_size in h_size_g:
+        for l1 in lambda_l1_g:
+            for l2 in lambda_l2_g:
+                for mem in mem_size_g:
+                    for rep in replay_size_g:
+                        X.append([h, h_size, l1, l2, mem, rep])
+
 ###Do the actual search  
 #params
-max_iters = 100
+search_iters = 10#How many hyperparam combinations to try?
 r = 3#Initial random searches.
 
-train_iters = 10
-test_iters = 10
+train_iters = 10000#How many games in testing stage?
+test_iters = 1000#How many games in training stage?
 
+h_params = [2, 8, 0.1, 0.1, 5000, 5000]
 
 #Pick initial X's.
 init_inds = np.random.choice(range(np.shape(X)[0]), r, replace = False)
 
 #Evaluate Initial ones.
-train = np.array([X[i,:] for i in init_inds])
-candidates = np.array([X[i,:] for i in range(np.shape(X)[0]) if i not in init_inds])
-f = np.array([function_eval(list(train[i,:]), train_iters, test_iters) for i in range(np.shape(train)[0])])
+train = [X[i] for i in init_inds]
+candidates = [X[i] for i in range(np.shape(X)[0]) if i not in init_inds]
+f = np.array([function_eval(train[i], train_iters, test_iters) for i in range(np.shape(train)[0])])
 
 #For real do the actual search
-for i in range(max_iters):
+for i in range(search_iters):
     #Get the means and variances of the posterior process
-    mu, sig = gp_posterior(train, candidates, f)
+    mu, sig = gp_posterior(np.array(train), np.array(candidates), f)
     
     #Get the top part of our interval
     ei = get_expected_improvement(mu, sig, max(f))
@@ -334,10 +351,12 @@ for i in range(max_iters):
     next_eval = np.argmax(ei)
     
     #Evaluate the new method
-    train = np.vstack([train, candidates[next_eval,:]])
-    candidates = np.delete(candidates, next_eval, axis = 0)
-    new_f = function_eval(list(candidates[i,:]), train_iters, test_iters)
+    new_f = function_eval(candidates[i], train_iters, test_iters)
     f = np.append(f, new_f)
+    train.append(candidates[next_eval])
+    candidates.pop(next_eval)
     
     print "Last f feval was " + str(f[-1])
     print "Best was " + str(max(f))
+    
+print "Optimal HyperParam combination is at index " + str(np.argmax(f)) + " of \"train\""

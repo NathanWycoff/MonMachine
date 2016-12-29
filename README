@@ -1,0 +1,17 @@
+MonMachine is an AI to play Pokemon Showdown, an online, competitive 2 player Pokemon game.
+
+This project is a work in progress. Prototyping is being done on MiniMon, a game written for the express purpose of prototyping Pokemon AI.
+
+This project is described in further depth on the author's blog at https://radiansofjustice.wordpress.com/2016/12/29/monmachine-a-pokemon-ai/.
+
+This project relies on numpy, scipy, and tqdm, along with Theano and selenium. The former three can easily be installed using pip, but should be automatically installed when this repo is cloned through setup.py. The latter two have slightly more involved installation processes, see see below.
+
+For files using Selenium, Firefox must be installed on your system. Then, install the selenium python package by doing:
+
+pip install selenium
+
+Finally make sure you download geckodriver (https://github.com/mozilla/geckodriver/releases) and extract it to your /bin/ (for linux systems).
+
+For files using Theano, follow the installation instructions at http://deeplearning.net/software/theano/install.html.
+
+Unfortunately, at present, I have several paths hard-coded. If you notice a hard-coded path at the top of a file, be sure to change it.

@@ -6,7 +6,7 @@ Created on Sat Dec 24 18:14:37 2016
 
 A battery of tests for the artificial neural net class.
 
-They involve training a lot of neural nets to convergence. It takes time to run.
+They involve training several of neural nets to convergence. It takes time to run (1/2 hr on my laptop i7).
 """
 
 import unittest
@@ -15,6 +15,7 @@ import numpy as np
 import theano
 import theano.tensor as T
 
+#Import the custom built ANN class YOU SHOULD CHANGE THIS LINE
 import sys
 sys.path.append('/home/nathan/Documents/Documents/Self Study/MonMachine/Agents/')
 from artificial_neural_net import artificial_neural_net
@@ -70,7 +71,7 @@ class TestStringMethods(unittest.TestCase):
         X, w, y = gen_data(rng = rng, n = n, p = p, q = q)
         
         #Get ann
-        ann = artificial_neural_net(in_size = p, out_size = q, h = 0, h_size = 0, eta = 0.0001)
+        ann = artificial_neural_net(in_size = p, out_size = q, h = 0, h_size = 0, eta = 0.0001, lambda_l1 = 0, lambda_l2 = 0)
         
         
         #Do sgd
@@ -102,7 +103,7 @@ class TestStringMethods(unittest.TestCase):
         X, w, y = gen_data(rng = rng, n = n, p = p, q = q)
         
         #Get ann
-        ann = artificial_neural_net(in_size = p, out_size = q, h = 2, h_size = 4, eta = 0.0001)
+        ann = artificial_neural_net(in_size = p, out_size = q, h = 2, h_size = 4, eta = 0.0001, lambda_l1 = 0, lambda_l2 = 0)
         
         
         #Do sgd
@@ -134,7 +135,7 @@ class TestStringMethods(unittest.TestCase):
         X, w, y = gen_data(rng = rng, n = n, p = p, q = q)
         
         #Get ann
-        ann = artificial_neural_net(in_size = p, out_size = q, h = 0, h_size = 0, eta = 0.0001)
+        ann = artificial_neural_net(in_size = p, out_size = q, h = 0, h_size = 0, eta = 0.0001, lambda_l1 = 0, lambda_l2 = 0)
         
         
         #Do sgd to learn the first response coefs, make sure it doesn't touch the second
@@ -192,7 +193,7 @@ class TestStringMethods(unittest.TestCase):
         X, w, y = gen_data(rng = rng, n = n, p = p, q = q)
         
         #Get ann
-        ann = artificial_neural_net(in_size = p, out_size = q, h = 2, h_size = 4, eta = 0.0001)
+        ann = artificial_neural_net(in_size = p, out_size = q, h = 2, h_size = 4, eta = 0.0001, lambda_l1 = 0, lambda_l2 = 0)
         
         for i in range(iters):
             for g in range(q):
@@ -225,7 +226,7 @@ class TestStringMethods(unittest.TestCase):
         
         #Get ann with mergers
         to_merge = [[0,1,2,3,4],[5,6,7,8,9],[10,11,12,13,14],[15,16,17,18,19]]
-        ann = artificial_neural_net(in_size = p, out_size = q, h = 2, h_size = 4, eta = 0.0001, to_merge = to_merge)
+        ann = artificial_neural_net(in_size = p, out_size = q, h = 2, h_size = 4, eta = 0.0001, to_merge = to_merge, lambda_l1 = 0, lambda_l2 = 0)
         
         self.assertTrue(np.shape(ann.layers[0].w.get_value())[0] == 4)
         

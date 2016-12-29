@@ -13,9 +13,10 @@ Starts experience replay only when it has a full memory.
 @author: Nathan Wycoff
 """
 
-#Import the custom built ANN class
-import os
-os.chdir('/home/nathan/Documents/Documents/Self Study/MonMachine/Agents')
+
+#Import the custom built ANN class YOU SHOULD CHANGE THIS LINE
+import sys
+sys.path.append('/home/nathan/Documents/Documents/Self Study/MonMachine/')
 from artificial_neural_net import artificial_neural_net
 
 #Theano is a numerical computation library
@@ -134,7 +135,7 @@ class neural_q_learner(object):
         ##Experience Replay
         #TODO: Make this asyncronous
         if len(self.memory) == self.mem_size:
-            experience_sample = random.sample(self.memory, self.replay_size)
+            experience_sample = [self.memory[i] for i in np.random.choice(len(self.memory), self.replay_size)]
             for exp in experience_sample:
                 self.update(exp[0], exp[1], exp[2], exp[3], replay = True)
             

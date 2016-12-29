@@ -1,0 +1,15 @@
+This file will describe MiniMon, a game which is meant to be similar to Pokemon but considerably simpler. The purpose is for rapid prototyping of AI meant to play Pokemon-like games.
+
+MiniMon is not playable by humans; instead, learning programs will be informed of the games state and prompted for decisions.
+
+In MiniMon, each player controls an Entity. On each turn, entities make one of three moves. 
+
+Players choose their moves before a turn. During a turn, a coin is flipped to determine which entity executes its move first.
+
+-There are different types of entities, which are described in "entites_description.txt". 
+-Moves may be offensive or defensive. 
+-Certain moves do additional damage against certain types of entities. 
+-Entities start with a variable amount of health, determined by their type. 
+-Moves damage is stochastic, but the damage distribution differs for each move.
+
+The game ends when the health of one entity reaches zero or below.
