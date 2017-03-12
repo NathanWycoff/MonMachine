@@ -12,6 +12,8 @@ has the ability to merge input dimensions and later split them, as in
 http://papers.nips.cc/paper/531-node-splitting-a-constructive-algorithm-for-feed-forward-neural-networks.pdf
 
 Intended for use in Q learning.
+
+TODO: The way it's set up, are shrinking bias terms, so let's undo that.
 """
 
 import os

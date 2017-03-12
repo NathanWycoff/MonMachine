@@ -16,7 +16,7 @@ Starts experience replay only when it has a full memory.
 
 #Import the custom built ANN class YOU SHOULD CHANGE THIS LINE
 import sys
-sys.path.append('/home/nathan/Documents/Documents/Self Study/MonMachine/')
+sys.path.append('/home/nathan/Documents/Documents/Self Study/MonMachine/Agents/')
 from artificial_neural_net import artificial_neural_net
 
 #Theano is a numerical computation library
@@ -157,6 +157,9 @@ class neural_q_learner(object):
         :param action: The action taken on state_last. By default, this agent
         stores the last action, and uses it if None is passed. If doing experience
         replay, pass the correct action instead.
+        
+        :type replay: bool
+        :param replay: Is this being called from experience replay? If so, it's already stored.
         """
         #Get our last action if necessary
         action = self.last_action if action is None else action
@@ -166,7 +169,7 @@ class neural_q_learner(object):
         target = np.reshape(reward + max_q, [1,1])
         
         #Do SGD!
-        self.ann.grad_on(state_last, target, self.last_action)
+        self.ann.grad_on(state_last, target, action)
         
         #Store the experience in our memory (s,s,r,a)
         if not replay:

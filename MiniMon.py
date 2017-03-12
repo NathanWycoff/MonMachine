@@ -22,15 +22,17 @@ import tqdm
 
 ##Import my other stuff YOU SHOULD CHANGE THIS LINE
 import sys
-sys.path.append('/home/nathan/Documents/Documents/Self Study/MonMachine/')
+sys.path.append('/home/nathan/Documents/Self Study/MonMachine/')
 
 #Import GP optimization funcs.
-from gp_optimizer import gp_posterior, get_expected_improvement
+#from gp_optimizer import gp_posterior, get_expected_improvement
 
 #Import my learning agents
 from Agents.completely_random import random_learner
 from Agents.neural_q_learner import neural_q_learner
 from Agents.human_agent import Human_Agent
+
+import cPickle as pickle
 
 #Import the entities from my game.
 import entities as ent
@@ -102,7 +104,7 @@ class Environment(object):
             self.entity_2.d, self.entity_1.health, self.entity_1.t, self.entity_1.p_miss, self.entity_1.d]
 
     #Turn a state list into a state vector for learner consumption.
-    def get_state_vector(self, state_list):   
+    def get_state_vector(self, state_list):
         """
         This function will be called to create one-hot vectors for categorical variates.
         Assumes there is an intercept term, so the last element will return the zero vector.
@@ -142,7 +144,7 @@ class Environment(object):
                 print "Game Ending..."
             self.game_over = True
             
-        #Calculate reward, simply difference in enemy health
+        #Calculate reward, simply whether they won or not.
         reward_1 = 0 if self.entity_2.alive else 100
         reward_2 = 0 if self.entity_1.alive else 100
         
@@ -360,3 +362,80 @@ for i in range(search_iters):
     print "Best was " + str(max(f))
     
 print "Optimal HyperParam combination is at index " + str(np.argmax(f)) + " of \"train\""
+
+#############################################################################
+#Generate random vs random play to optimize vs random without having to generate gameplay.
+#Stores pairs of "state_last, state_next, reward, action".
+#All this just to get the state vector size.
+e1 = ent.random_entity()
+e2 = ent.random_entity()
+env = Environment(e1, e2)
+state_size = np.shape(env.get_state_vector(env.state_1))[1]
+
+train_iters = 100000
+max_game_length = 1000
+
+learner_1 = random_learner(3)
+learner_2 = random_learner(3)
+
+print "Training Learner..."
+
+wins_1 = 0
+
+sars_1 = []
+sars_2 = []
+
+####Train the learner
+for it in tqdm.tqdm(range(train_iters)):
+    
+    e1 = ent.random_entity()
+    e2 = ent.random_entity()
+    
+    env = Environment(e1, e2)
+    env.add_learners(learner_1, learner_2)
+    
+    turn_length = 0
+    
+    while (not env.game_over):
+        #The agents get to make a decision, these are 1 indexed
+        decision_1 = str(learner_1.act(env.get_state_vector(env.state_1))+1)
+        #decision_1 = str(learner_1.act(env.state_1)+1)#Uncomment this line if human agent.
+        decision_2 = str(learner_2.act(env.get_state_vector(env.state_2))+1)
+        
+        #Pick who goes first randomly
+        whos_first = np.random.binomial(1,0.5)
+        
+        #Do the moves
+        if whos_first:
+            e1.move(decision_1, e2)
+            e2.move(decision_2, e1) if e2.alive else 0
+        else:
+            e2.move(decision_2, e1)
+            e1.move(decision_1, e2) if e1.alive else 0
+        
+        #Update state
+        env.update_state()
+        
+        #Update Agents
+        env.inform_agents()
+        
+        #Update storage
+        reward_1 = int(not e2.alive) * 100
+        reward_2 = int(not e1.alive) * 100
+        
+        sars_1.append([env.last_state_1, env.state_1, reward_1, decision_1])
+        sars_2.append([env.last_state_2, env.state_2, reward_2, decision_2])
+        
+        if not e2.alive:
+            wins_1 += 1
+        
+        turn_length += 1
+        
+        if turn_length > max_game_length:
+            print "Game Draw; max length exceeded"
+            break
+
+sars = sars_1 + sars_2
+f = open('/home/nathan/Documents/Self Study/MonMachine/sars.pkl', 'w')
+pickle.dump(sars, f)
+f.close()
